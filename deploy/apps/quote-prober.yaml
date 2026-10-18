@@ -1,0 +1,16 @@
+# quote-prober defaults, shared by every environment. Environment files may only override the keys
+# allowed by hack/check-env-values.sh.
+cmd: quote-prober
+image:
+  repository: wallet-k8s-practice/quote-prober
+port: 8080
+replicas: 1
+env:
+  AMBER_RPS: "0.5"
+  PROBE_INTERVAL: 60s
+  PROBE_TIMEOUT: 10s
+  LOG_LEVEL: info
+secretEnvFrom: quote-prober-amber
+resources:
+  requests: { cpu: 10m, memory: 32Mi }
+  limits: { memory: 64Mi }

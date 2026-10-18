@@ -1,0 +1,66 @@
+# Environments, versions and promotion
+
+How this lab models dev / staging / prod, and why. Based on common Argo CD practice (sources at the end).
+
+## Decisions
+
+| Question | Choice | Why |
+|---|---|---|
+| Branches or folders for environments? | **One branch (`main`), one folder per environment** | Environment branches drift and cause merge conflicts; folders keep every environment visible in one commit |
+| Umbrella chart, copied charts, or one shared chart? | **One shared chart, one release per service** | Services are few and alike. Umbrella charts add a dependency layer and tie release lifecycles together; copies drift |
+| How are environments different? | **Layered values: app defaults → thin environment file → secrets via External Secrets** | Each layer owns one kind of setting |
+| What is a version? | **One semver tag = one image digest + one chart version** | Never deploy an untested combination of chart and image |
+| How does a version move? | **dev auto, staging auto after dev is healthy, prod by approval** — first by CI bot PRs, then by **Kargo** | Promotion is a reviewed git change; prod never syncs something staging did not run |
+| How do reviewers see the real result? | **Rendered diff in CI**, later Argo CD **Source Hydrator** | Layered values hide the final manifest; the diff shows it |
+
+## Layout
+
+```
+deploy/
+├── charts/go-service/            templates; packaged and pushed as an OCI chart on release
+├── apps/
+│   ├── quote-prober.yaml         app defaults shared by every environment
+│   └── mock-quote-api.yaml
+├── envs/
+│   ├── dev/                      inner loop (make dev); not managed by Argo CD
+│   ├── staging/
+│   │   ├── version.yaml          the release this environment runs (written by promotion)
+│   │   └── quote-prober.yaml     only allowed keys: replicas, env, secret refs
+│   └── prod/
+│       ├── version.yaml
+│       └── quote-prober.yaml
+└── argocd/                       Applications: chart from OCI at the version in envs/<env>/version.yaml,
+                                  valueFiles = apps/<app>.yaml + envs/<env>/<app>.yaml
+```
+
+## Release and promotion flow
+
+```
+git tag v1.4.2
+  └─ release.yml: build images → scan → push → sign → bake digests into chart → push chart 1.4.2 (OCI)
+
+Stage 1 (now): CI opens a PR that sets envs/staging/version.yaml = 1.4.2 → merge → Argo CD syncs
+               smoke test passes → second PR sets envs/prod/version.yaml = 1.4.2 → review → merge
+
+Stage 2 (later): Kargo (operator) does the same with CRDs:
+  Warehouse  watches GHCR for new image + chart → creates Freight "1.4.2"
+  Stage dev → Stage staging → Stage prod (each only accepts Freight verified upstream)
+  Promotion  commits the version to git; Argo CD syncs; prod needs a manual approval
+```
+
+## Guardrails against configuration mess
+
+1. Environment files may only set keys on an allow-list (CI fails otherwise). Probes, resources and
+   security context belong to the chart version, not to an environment.
+2. `values.schema.json` validates every rendered environment.
+3. CI renders staging and prod for each PR and posts the diff against what is deployed.
+4. Kyverno enforces runtime rules (signed images, non-root, limits) whatever the values say.
+5. Auto-sync only outside prod; prod changes go through review.
+
+## Sources
+
+- Codefresh, Argo CD best practices — folders over environment branches
+- learnk8s, How to promote releases between GitOps environments — `environments/<env>/values.yaml` + `version.yaml`
+- Argo CD docs, Source Hydrator — rendered manifests (beta since v3.5)
+- Kargo docs, Concepts — Warehouse, Freight, Stage, Promotion
+- The New Stack, The super Helm chart: to deploy or not to deploy — shared vs per-service charts

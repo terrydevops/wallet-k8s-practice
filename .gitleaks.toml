@@ -1,0 +1,10 @@
+# Default gitleaks rules, plus one narrow allowance: public EVM contract addresses (e.g. the USDC
+# token in scenarios.yaml) are not secrets, but match the generic-api-key rule because the field is
+# called "token".
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public EVM addresses"
+regexTarget = "secret"
+regexes = ['''^0x[0-9a-fA-F]{40}$''']

@@ -1,0 +1,9 @@
+# mock-quote-api defaults. Uses its built-in mock credentials (mock-id / mock-secret).
+# MOCK_MODE: ok | rate_limited | server_error | slow
+cmd: mock-quote-api
+image:
+  repository: wallet-k8s-practice/mock-quote-api
+port: 8081
+replicas: 1
+env:
+  MOCK_MODE: ok

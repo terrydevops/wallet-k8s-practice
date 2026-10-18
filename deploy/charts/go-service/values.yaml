@@ -1,0 +1,35 @@
+# Binary in apps/go/cmd to run. Also used as the container name.
+cmd: quote-prober
+
+image:
+  repository: wallet-k8s-practice/quote-prober
+  # A release pins the image by digest (written by release.yml when the chart is packaged).
+  # Otherwise tag is used, defaulting to the chart's appVersion. Never "latest".
+  digest: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicas: 1
+port: 8080
+
+# Plain settings, rendered as env vars.
+env: {}
+
+# Name of an existing Secret whose keys become env vars (credentials). Created outside the chart
+# (`make secret`, later an ExternalSecret).
+secretEnvFrom: ""
+
+# Optional scenarios.yaml content. When set, it is mounted and SCENARIOS_FILE points at it;
+# otherwise the file baked into the image is used.
+scenarios: ""
+
+resources:
+  requests: { cpu: 10m, memory: 32Mi }
+  limits: { memory: 64Mi }
+
+metrics:
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+
+# Dashboards are installed once per cluster from deploy/dashboards, not per release.

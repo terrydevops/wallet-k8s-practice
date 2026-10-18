@@ -1,0 +1,7 @@
+{
+  "domains": [
+    {"id": "ethereum", "name": "Ethereum", "type": "EVM", "chainId": "0x1", "finalityTime": "60", "dex": ["1inch", "kyberswap", "0x"]},
+    {"id": "base", "name": "Base", "type": "EVM", "chainId": "0x2105", "finalityTime": "10", "dex": ["1inch", "kyberswap"]},
+    {"id": "solana", "name": "Solana", "type": "SOLANA", "chainId": "", "finalityTime": "15", "dex": ["jupiter"]}
+  ]
+}

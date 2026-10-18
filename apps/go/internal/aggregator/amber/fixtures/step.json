@@ -1,0 +1,10 @@
+{
+  "stepId": "step-1",
+  "transaction": {
+    "domainId": "base",
+    "type": "swap",
+    "evmTx": {"to": "0x0000000000000000000000000000000000000002", "value": "100000000000000000", "data": "0x", "gasLimit": "250000"}
+  },
+  "approve": null,
+  "revokeApproval": null
+}

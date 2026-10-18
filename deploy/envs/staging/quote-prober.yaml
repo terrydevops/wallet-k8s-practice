@@ -1,0 +1,4 @@
+# staging: same release as prod will get, probing the in-cluster mock API.
+env:
+  AMBER_BASE_URL: http://mock-quote-api:8081
+  AMBER_RPS: "1"

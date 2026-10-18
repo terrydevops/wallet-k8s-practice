@@ -1,0 +1,21 @@
+# Swap scenarios probed every PROBE_INTERVAL. Quotes are read-only: nothing is signed or sent on chain.
+# Amounts are in the source token's smallest unit. Token addresses and the example address are the
+# ones used in the aggregator's public API documentation.
+scenarios:
+  - name: base-eth-usdc
+    buildTx: true
+    request:
+      from: { chain: base, token: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" }   # native ETH
+      to: { chain: base, token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }     # USDC
+      amount: "100000000000000000"                                                    # 0.1 ETH
+      address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+      slippagePct: 1
+
+  - name: ethereum-eth-usdc
+    buildTx: false
+    request:
+      from: { chain: ethereum, token: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" }
+      to: { chain: ethereum, token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" }   # USDC
+      amount: "100000000000000000"
+      address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+      slippagePct: 1

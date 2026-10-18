@@ -1,0 +1,23 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - noctx
+    - unconvert
+  exclusions:
+    rules:
+      # Test fixtures use token addresses and fake secrets that trip the credentials heuristic.
+      - path: _test\.go
+        linters: [gosec]
+        text: G101
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/terrydevops/wallet-k8s-practice

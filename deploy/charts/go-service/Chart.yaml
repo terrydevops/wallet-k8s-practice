@@ -1,0 +1,6 @@
+apiVersion: v2
+name: go-service
+description: One chart for every Go binary in apps/go (quote-prober, mock-quote-api); `cmd` selects it.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

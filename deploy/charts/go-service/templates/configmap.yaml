@@ -1,0 +1,10 @@
+{{- if .Values.scenarios }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "go-service.name" . }}-scenarios
+  labels: {{- include "go-service.labels" . | nindent 4 }}
+data:
+  scenarios.yaml: |
+    {{- .Values.scenarios | nindent 4 }}
+{{- end }}

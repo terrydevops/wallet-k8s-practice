@@ -1,0 +1,5 @@
+# dev: inner loop (make dev). Image tag is set on the command line from the local build.
+env:
+  AMBER_BASE_URL: http://mock-quote-api:8081
+  AMBER_RPS: "1"
+  PROBE_INTERVAL: 30s

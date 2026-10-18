@@ -1,0 +1,3 @@
+# Release running in prod. Promoted from staging only after staging is healthy on it.
+# Empty until the first release exists.
+version: ""

@@ -1,0 +1,15 @@
+# Grafana dashboards, installed once per cluster into the monitoring namespace (not per environment:
+# each environment is a value of the dashboard's "environment" variable). The Grafana sidecar picks up
+# ConfigMaps labelled grafana_dashboard=1.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: wallet-k8s-practice
+configMapGenerator:
+  - name: dashboard-swap-path
+    files:
+      - swap-path.json

@@ -1,0 +1,9 @@
+# Workload namespace for dev; enforces the "restricted" Pod Security Standard.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wallet-dev
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+    app.kubernetes.io/part-of: wallet-k8s-practice

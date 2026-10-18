@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "go-service.name" . }}
+  labels: {{- include "go-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: {{- include "go-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "go-service.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 15
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532   # distroless "nonroot"; numeric so the kubelet can verify runAsNonRoot
+        runAsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: {{ .Values.cmd }}
+          image: {{ include "go-service.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.port }}
+          env:
+            - name: LISTEN_ADDR
+              value: ":{{ .Values.port }}"
+            {{- if .Values.scenarios }}
+            - name: SCENARIOS_FILE
+              value: /etc/scenarios/scenarios.yaml
+            {{- end }}
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- with .Values.secretEnvFrom }}
+          envFrom:
+            - secretRef:
+                name: {{ . }}
+          {{- end }}
+          startupProbe:   # quote-prober checks supported chains before it listens
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          {{- if .Values.scenarios }}
+          volumeMounts:
+            - name: scenarios
+              mountPath: /etc/scenarios
+              readOnly: true
+          {{- end }}
+      {{- if .Values.scenarios }}
+      volumes:
+        - name: scenarios
+          configMap:
+            name: {{ include "go-service.name" . }}-scenarios
+      {{- end }}

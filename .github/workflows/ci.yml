@@ -1,0 +1,149 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Nothing by default; each job asks for what it needs.
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: go (tidy, vet, test, lint)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/go
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: apps/go/go.mod
+          cache-dependency-path: apps/go/go.sum
+
+      - name: go.mod is tidy
+        run: go mod tidy -diff
+
+      - name: vet
+        run: go vet ./...
+
+      - name: test
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: coverage summary
+        run: go tool cover -func=coverage.out | tail -1 >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          working-directory: apps/go
+
+  image:
+    name: image (${{ matrix.cmd }})
+    needs: go
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        cmd: [quote-prober, mock-quote-api]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Build only: pushing, signing and SBOM belong to release.yml.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: apps/go
+          build-args: CMD=${{ matrix.cmd }}
+          tags: ci/${{ matrix.cmd }}:${{ github.sha }}
+          load: true
+          push: false
+
+      - name: image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ci/${{ matrix.cmd }}:${{ github.sha }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+  chart:
+    name: deploy config (env files, lint, kubeconform, rendered diff)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the rendered diff needs the base commit
+          persist-credentials: false
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.15.0
+
+      - name: environment files are thin
+        run: make env-check
+
+      - name: lint and validate every rendered environment
+        run: make chart-check
+
+      # Layered values hide the final manifests; show reviewers exactly what changes per environment.
+      - name: rendered diff against the base branch
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add --detach ../base "$BASE_SHA"
+          if [ -x ../base/hack/render.sh ]; then
+            ../base/hack/render.sh build/base ../base/deploy >/dev/null
+          else
+            mkdir -p build/base
+          fi
+          {
+            echo "### Rendered manifest changes"
+            echo '```diff'
+            diff -ruN build/base build/rendered | head -n 2000 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  security:
+    name: secrets and dependencies
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read # gitleaks lists the PR's commits
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: dependency and config scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"

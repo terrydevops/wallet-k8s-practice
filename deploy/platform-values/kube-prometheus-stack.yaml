@@ -1,0 +1,38 @@
+# kube-prometheus-stack for a laptop kind cluster. Chart version is pinned in the Makefile
+# (later: in the Argo CD Application).
+
+# Pick up ServiceMonitors, PodMonitors and PrometheusRules from every namespace, not only those
+# labelled with this Helm release.
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    retention: 2d
+    resources:
+      requests: { cpu: 100m, memory: 400Mi }
+      limits: { memory: 1Gi }
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+grafana:
+  # Initial admin password is generated into a Secret; `make ui` prints how to read it.
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 384Mi }
+
+# Control-plane components are not reachable for scraping in kind; disabling avoids false alerts.
+kubeEtcd: { enabled: false }
+kubeControllerManager: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeProxy: { enabled: false }

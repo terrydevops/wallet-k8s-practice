@@ -1,0 +1,6 @@
+.env
+bin/
+*.kubeconfig
+coverage.out
+.DS_Store
+build/

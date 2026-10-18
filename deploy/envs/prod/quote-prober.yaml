@@ -1,0 +1,4 @@
+# prod: the real API. Credentials come from the quote-prober-amber Secret (External Secrets in phase 3).
+# Single replica: two probers would double the request rate (leader election is planned).
+env:
+  AMBER_BASE_URL: https://tws.trustwallet.com
