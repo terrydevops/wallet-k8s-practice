@@ -137,6 +137,8 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Match .tool-versions; the action's default is older and ignores [[allowlists]] (8.25+).
+          GITLEAKS_VERSION: 8.30.1
 
       - name: dependency and config scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
