@@ -17,6 +17,9 @@ spec:
       include: "*/namespace.yaml"
   destination:
     server: https://kubernetes.default.svc
+    # Namespaces are cluster-scoped, so this is unused; it is set because the project only accepts
+    # destinations in wallet-* and monitoring.
+    namespace: wallet-dev
   syncPolicy:
     automated: {prune: false, selfHeal: true} # deleting a namespace deletes everything in it
 ---
