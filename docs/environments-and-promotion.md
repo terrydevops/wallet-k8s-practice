@@ -10,7 +10,7 @@ How this lab models dev / staging / prod, and why. Based on common Argo CD pract
 | Umbrella chart, copied charts, or one shared chart? | **One shared chart, one release per service** | Services are few and alike. Umbrella charts add a dependency layer and tie release lifecycles together; copies drift |
 | How are environments different? | **Layered values: app defaults → thin environment file → secrets via External Secrets** | Each layer owns one kind of setting |
 | What is a version? | **One semver tag = one image digest + one chart version** | Never deploy an untested combination of chart and image |
-| How does a version move? | **dev auto, staging auto after dev is healthy, prod by approval** — first by CI bot PRs, then by **Kargo** | Promotion is a reviewed git change; prod never syncs something staging did not run |
+| How does a version move? | **dev on every release (bot commit), staging by reviewed PR, prod by approval** — CI bot now, **Kargo** later | Promotion is a reviewed git change; prod never syncs something staging did not run |
 | How do reviewers see the real result? | **Rendered diff in CI**, later Argo CD **Source Hydrator** | Layered values hide the final manifest; the diff shows it |
 
 ## Layout
@@ -20,9 +20,9 @@ deploy/
 ├── charts/go-service/            templates; packaged and pushed as an OCI chart on release
 ├── apps/
 │   ├── quote-prober.yaml         app defaults shared by every environment
-│   └── mock-quote-api.yaml
+│   └── mock-quote-api.yaml       used by make dev (wallet-local) only; no environment runs the mock
 ├── envs/
-│   ├── dev/                      inner loop (make dev); Argo CD manages only its namespace
+│   ├── dev/                      every release automatically; real API
 │   ├── staging/
 │   │   ├── version.yaml          the release this environment runs (written by promotion)
 │   │   └── quote-prober.yaml     only allowed keys: replicas, env, secret refs
@@ -40,8 +40,9 @@ deploy/
 git tag v1.4.2
   └─ release.yml: build images → scan → push → sign → bake digests into chart → push chart 1.4.2 (OCI)
 
-Stage 1 (now): CI opens a PR that sets envs/staging/version.yaml = 1.4.2 → merge → Argo CD syncs
-               smoke test passes → second PR sets envs/prod/version.yaml = 1.4.2 → review → merge
+Stage 1 (now): CI commits envs/dev/version.yaml = 1.4.2 to main → Argo CD syncs dev
+               CI opens a PR that sets envs/staging/version.yaml = 1.4.2 → merge → Argo CD syncs staging
+               (prod: same, by a reviewed PR and a manual sync; not deployed in this lab yet)
 
 Stage 2 (later): Kargo (operator) does the same with CRDs:
   Warehouse  watches GHCR for new image + chart → creates Freight "1.4.2"

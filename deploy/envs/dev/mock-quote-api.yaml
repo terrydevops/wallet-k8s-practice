@@ -1,3 +1,0 @@
-# dev: mock defaults are fine.
-env:
-  MOCK_MODE: ok

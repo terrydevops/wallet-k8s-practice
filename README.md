@@ -26,15 +26,16 @@ On a local kind cluster (Prometheus Operator, Grafana dashboard, mock API by def
 
 ```bash
 make platform            # kind cluster "wallet-k8s-practice" + kube-prometheus-stack (~2 min)
-make dev                 # build, kind load, helm install mock-quote-api + quote-prober into wallet-dev
+make dev                 # inner loop: build, kind load, helm install mock + prober into wallet-local
 make smoke               # asserts successful quotes are being recorded
 make ui                  # Grafana on localhost:3300 (GRAFANA_PORT), dashboard "Swap path — quote prober"
 make dev REAL=1          # same, against the real API with the key from .env
 make down                # delete the cluster
 ```
 
-staging and prod are deployed by Argo CD from git (pull-based: the cluster polls the repo, nothing
-pushes into it). dev stays on `make dev`.
+dev, staging and prod are deployed by Argo CD from git (pull-based: the cluster polls the repo, nothing
+pushes into it), all from one ApplicationSet. dev and staging probe the real API; prod is defined but
+not deployed yet. `make dev` uses its own namespace, wallet-local, which Argo CD does not manage.
 
 ```bash
 make gitops              # Argo CD + root app-of-apps; follows your git remote (fork it for your own CD)

@@ -21,7 +21,8 @@ ARGOCD_VERSION  := $(shell sed -n 's/^argoCDVersion: *//p' deploy/argocd/values.
 REPO_URL        ?= $(shell git remote get-url origin 2>/dev/null | sed -E 's|^git@github.com:|https://github.com/|; s|\.git$$||')
 # Released images and the OCI chart: ghcr.io/<owner>/<repo>, lower case (as release.yml pushes them).
 REGISTRY        ?= $(shell echo '$(REPO_URL)' | sed -E 's|^https://github.com/|ghcr.io/|' | tr '[:upper:]' '[:lower:]')
-DEV_NS          := wallet-dev
+# make dev deploys here: local builds, not managed by Argo CD (wallet-dev/staging/prod are).
+LOCAL_NS        := wallet-local
 DEV_TAG         := dev-$(shell date +%Y%m%d%H%M%S)
 CHART           := deploy/charts/go-service
 # Local ports for UIs; 3000 is often taken by another Grafana.
@@ -118,10 +119,9 @@ argocd: cluster ## Bootstrap Argo CD, or break-glass reinstall from the same val
 	@echo "Argo CD installed; it will follow $(REPO_URL)"
 
 .PHONY: gitops
-gitops: argocd ## Hand staging/prod to Argo CD: seed their Secrets, apply the root app-of-apps
-	hack/secret.sh $(KCTX) wallet-staging mock
-	@if [ -f .env ]; then hack/secret.sh $(KCTX) wallet-prod real; \
-	else echo "no .env: wallet-prod gets no credentials; its prober stays unready until 'hack/secret.sh $(KCTX) wallet-prod real'"; fi
+gitops: argocd ## Hand dev/staging/prod to Argo CD: seed the API credentials, apply the root app-of-apps
+	@if [ -f .env ]; then for ns in wallet-dev wallet-staging; do hack/secret.sh $(KCTX) $$ns real; done; \
+	else echo "no .env: probers stay unready until 'hack/secret.sh $(KCTX) <namespace> real'"; fi
 	sed -e 's|__REPO_URL__|$(REPO_URL)|g' -e 's|__REGISTRY__|$(REGISTRY)|g' deploy/bootstrap/root-app.yaml | $(KUBECTL) apply -f -
 
 .PHONY: argocd-ui
@@ -130,19 +130,21 @@ argocd-ui: ## Port-forward Argo CD to localhost:8443 (user admin; password: see 
 	$(KUBECTL) -n argocd port-forward svc/argocd-server 8443:80
 
 .PHONY: dev
-dev: ## Build, load into kind, deploy mock + prober to wallet-dev. REAL=1 uses .env and the real API
+dev: ## Inner loop: build, kind load, helm install mock + prober into wallet-local (mock API; REAL=1: real API)
 	$(MAKE) images TAG=$(DEV_TAG)
 	for c in quote-prober mock-quote-api; do kind load docker-image $(IMAGE_PREFIX)/$$c:$(DEV_TAG) --name $(CLUSTER); done
-	hack/secret.sh $(KCTX) $(DEV_NS) $(if $(REAL),real,mock)
+	$(KUBECTL) create namespace $(LOCAL_NS) --dry-run=client -o yaml | $(KUBECTL) apply -f - >/dev/null
+	$(KUBECTL) label namespace $(LOCAL_NS) --overwrite pod-security.kubernetes.io/enforce=restricted \
+	  pod-security.kubernetes.io/warn=restricted app.kubernetes.io/part-of=wallet-k8s-practice >/dev/null
+	hack/secret.sh $(KCTX) $(LOCAL_NS) $(if $(REAL),real,mock)
 	for app in mock-quote-api quote-prober; do \
-	  $(HELM) upgrade --install $$app $(CHART) -n $(DEV_NS) \
-	    -f deploy/apps/$$app.yaml -f deploy/envs/dev/$$app.yaml --set image.tag=$(DEV_TAG) \
-	    $(if $(REAL),$$( [ $$app = quote-prober ] && echo --set env.AMBER_BASE_URL=https://tws.trustwallet.com --set env.AMBER_RPS=0.5)) \
+	  $(HELM) upgrade --install $$app $(CHART) -n $(LOCAL_NS) -f deploy/apps/$$app.yaml --set image.tag=$(DEV_TAG) \
+	    $$( [ $$app = quote-prober ] && echo --set env.AMBER_BASE_URL=$(if $(REAL),https://tws.trustwallet.com,http://mock-quote-api:8081) --set env.PROBE_INTERVAL=30s) \
 	    --wait || exit 1; done
 
 .PHONY: smoke
-smoke: ## Assert quote-prober in wallet-dev reports successful quotes
-	hack/smoke.sh $(KCTX) $(DEV_NS)
+smoke: ## Assert quote-prober in NS (default wallet-local) reports successful quotes
+	hack/smoke.sh $(KCTX) $(or $(NS),$(LOCAL_NS))
 
 .PHONY: ui
 ui: ## Port-forward Grafana to localhost:$(GRAFANA_PORT) (admin password: see the command printed first)

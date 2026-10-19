@@ -3,7 +3,7 @@ name: release
 # git tag vX.Y.Z on a commit of main →
 #   images: multi-arch build (amd64 + arm64), push, scan, SBOM + provenance, keyless cosign signature
 #   chart:  go-service X.Y.Z with every image digest baked in, pushed to GHCR as OCI, signed
-#   promote: pull request setting deploy/envs/staging/version.yaml to X.Y.Z; Argo CD syncs once merged
+#   promote: dev gets X.Y.Z directly (commit to main); staging by pull request; Argo CD syncs each
 # One version therefore always means one chart plus the exact images it was released with.
 on:
   push:
@@ -170,7 +170,7 @@ jobs:
           echo "chart: \`$REGISTRY/charts/go-service:$VERSION\` (\`$DIGEST\`)" >> "$GITHUB_STEP_SUMMARY"
 
   promote:
-    name: promote to staging (pull request)
+    name: promote (dev now, staging by pull request)
     needs: [meta, chart]
     runs-on: ubuntu-24.04
     permissions:
@@ -185,12 +185,21 @@ jobs:
         with:
           ref: main
 
-      - name: open the pull request
+      - name: dev, without review
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          sed -i -E "s/^version:.*/version: \"$VERSION\"/" deploy/envs/dev/version.yaml
+          if git diff --quiet; then echo "dev already runs $VERSION"; else
+            git commit -am "deploy(dev): $VERSION"
+            git push origin HEAD:main # GITHUB_TOKEN pushes do not trigger workflows, so this cannot loop
+            echo "dev: $VERSION committed to main" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: staging, by pull request
         run: |
           sed -i -E "s/^version:.*/version: \"$VERSION\"/" deploy/envs/staging/version.yaml
           git diff --exit-code --quiet && { echo "staging already runs $VERSION"; exit 0; }
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$BRANCH"
           git commit -am "deploy(staging): $VERSION"
           git push origin "$BRANCH"

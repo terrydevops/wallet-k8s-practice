@@ -1,4 +1,4 @@
-# staging: same release as prod will get, probing the in-cluster mock API.
+# staging: the real API, the same as prod would get, so a release is checked against the real contract
+# before prod. Credentials: quote-prober-amber (make gitops seeds it from .env).
 env:
-  AMBER_BASE_URL: http://mock-quote-api:8081
-  AMBER_RPS: "1"
+  AMBER_BASE_URL: https://tws.trustwallet.com
