@@ -22,15 +22,16 @@ deploy/
 │   ├── quote-prober.yaml         app defaults shared by every environment
 │   └── mock-quote-api.yaml
 ├── envs/
-│   ├── dev/                      inner loop (make dev); not managed by Argo CD
+│   ├── dev/                      inner loop (make dev); Argo CD manages only its namespace
 │   ├── staging/
 │   │   ├── version.yaml          the release this environment runs (written by promotion)
 │   │   └── quote-prober.yaml     only allowed keys: replicas, env, secret refs
 │   └── prod/
 │       ├── version.yaml
 │       └── quote-prober.yaml
-└── argocd/                       Applications: chart from OCI at the version in envs/<env>/version.yaml,
-                                  valueFiles = apps/<app>.yaml + envs/<env>/<app>.yaml
+└── argocd/                       chart for the root app-of-apps: AppProject "wallet", namespaces, dashboards,
+                                  ApplicationSet "workloads" = (envs with a version) x (app files in that env):
+                                  chart from OCI at that version, valueFiles = apps/<app>.yaml + envs/<env>/<app>.yaml
 ```
 
 ## Release and promotion flow

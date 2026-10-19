@@ -33,6 +33,17 @@ make dev REAL=1          # same, against the real API with the key from .env
 make down                # delete the cluster
 ```
 
+staging and prod are deployed by Argo CD from git (pull-based: the cluster polls the repo, nothing
+pushes into it). dev stays on `make dev`.
+
+```bash
+make gitops              # Argo CD + root app-of-apps; follows your git remote (fork it for your own CD)
+make argocd-ui           # Argo CD on localhost:8443, user admin
+```
+
+A workload Application exists for `<env>` only once `deploy/envs/<env>/version.yaml` names a release;
+prod is never auto-synced.
+
 `make help` lists every target. `make ci` runs locally what the CI workflow runs. `make render` writes
 the final manifests of every environment to `build/rendered/`. Environments, versions and promotion:
 [docs/environments-and-promotion.md](docs/environments-and-promotion.md).
