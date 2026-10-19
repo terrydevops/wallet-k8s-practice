@@ -1,0 +1,19 @@
+# Kyverno for a laptop kind cluster: only the admission controller is needed (image verification at
+# admission). Chart version: deploy/argocd/values.yaml.
+
+admissionController:
+  replicas: 1 # production: 3, the webhook is fail-closed for the wallet namespaces
+  container:
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { memory: 384Mi }
+
+# Background scans, reports and cleanup policies are not used here.
+backgroundController: { enabled: false }
+reportsController: { enabled: false }
+cleanupController: { enabled: false }
+
+# Helm hooks that Argo CD would run on every sync (CRD migration) or never (pre-delete): off.
+crds:
+  migration: { enabled: false }
+webhooksCleanup: { enabled: false }

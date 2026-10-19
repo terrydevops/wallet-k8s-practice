@@ -68,3 +68,33 @@ spec:
   syncPolicy:
     syncOptions:
       - ServerSideApply=true
+---
+# Admission control. Kyverno verifies image signatures.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://kyverno.github.io/kyverno/
+      chart: kyverno
+      targetRevision: {{ .Values.kyvernoVersion | quote }}
+      helm:
+        releaseName: kyverno
+        valueFiles:
+          - $values/deploy/platform-values/kyverno.yaml
+    - repoURL: {{ .Values.repoURL | quote }}
+      targetRevision: {{ .Values.targetRevision | quote }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true # Kyverno CRDs exceed the client-side apply annotation limit

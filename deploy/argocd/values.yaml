@@ -9,3 +9,4 @@ registry: ""
 # (make platform / make argocd read these lines). Bump here, merge, and Argo CD rolls it out.
 kubePrometheusStackVersion: 92.10.1
 argoCDVersion: 10.9.2
+kyvernoVersion: 3.9.1
