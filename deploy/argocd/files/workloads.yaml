@@ -4,7 +4,7 @@
 # Each Application installs the released chart (OCI, digests baked in) at that version, with values
 # from git at main: apps/<app>.yaml, then envs/<env>/<app>.yaml. prod is never auto-synced.
 #
-# Helm only substitutes the __REPO_URL__ / __REGISTRY__ placeholders; {{ }} is the ApplicationSet's.
+# Helm fills in the repo, revision and registry placeholders; every {{ }} is the ApplicationSet's.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:

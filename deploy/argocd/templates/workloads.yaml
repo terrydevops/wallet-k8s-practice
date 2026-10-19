@@ -11,6 +11,8 @@ kind: Secret
 metadata:
   name: repo-wallet-charts
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
   labels:
     argocd.argoproj.io/secret-type: repository
 stringData:

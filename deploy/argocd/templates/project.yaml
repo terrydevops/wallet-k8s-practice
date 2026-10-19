@@ -5,6 +5,8 @@ kind: AppProject
 metadata:
   name: wallet
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2" # before any Application that names it
 spec:
   description: wallet-k8s-practice workloads and their platform glue
   sourceRepos:
