@@ -41,6 +41,10 @@ make gitops              # Argo CD + root app-of-apps; follows your git remote (
 make argocd-ui           # Argo CD on localhost:8443, user admin
 ```
 
+Argo CD also owns the platform: kube-prometheus-stack (auto-sync) and Argo CD itself (manual sync, no
+prune). Change them through git; chart versions live in `deploy/argocd/values.yaml`. `make platform` /
+`make argocd` are for a new cluster or break-glass only; commit any fix made that way right after.
+
 A workload Application exists for `<env>` only once `deploy/envs/<env>/version.yaml` names a release;
 prod is never auto-synced.
 
