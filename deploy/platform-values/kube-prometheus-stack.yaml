@@ -27,9 +27,10 @@ grafana:
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: ALL
+  # Grafana 13 builds its search index in memory; 384Mi was OOMKilled on the first dashboard load.
   resources:
-    requests: { cpu: 50m, memory: 128Mi }
-    limits: { memory: 384Mi }
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { memory: 768Mi }
 
 # Control-plane components are not reachable for scraping in kind; disabling avoids false alerts.
 kubeEtcd: { enabled: false }

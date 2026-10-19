@@ -28,7 +28,7 @@ On a local kind cluster (Prometheus Operator, Grafana dashboard, mock API by def
 make platform            # kind cluster "wallet-k8s-practice" + kube-prometheus-stack (~2 min)
 make dev                 # build, kind load, helm install mock-quote-api + quote-prober into wallet-dev
 make smoke               # asserts successful quotes are being recorded
-make ui                  # Grafana on localhost:3000, dashboard "Swap path — quote prober"
+make ui                  # Grafana on localhost:3300 (GRAFANA_PORT), dashboard "Swap path — quote prober"
 make dev REAL=1          # same, against the real API with the key from .env
 make down                # delete the cluster
 ```
@@ -86,7 +86,7 @@ hack/                      secret.sh (never prints values), smoke.sh, render.sh,
 | `swap_quote_routes` | aggregator, scenario | routes offered |
 | `swap_quote_amount_out` | aggregator, scenario | expected output, smallest units |
 | `swap_quote_price_impact_ratio` | aggregator, scenario | USD out / USD in - 1, fees included; -0.007 = 0.7% lost |
-| `http_client_*` | aggregator, url, method, name, status | from the go-libs HTTP client |
+| `httpclient_request_total`, `httpclient_request_duration_seconds` | aggregator, url, method, name, status | from the go-libs HTTP client |
 
 ## Configuration
 

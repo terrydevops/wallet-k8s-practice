@@ -23,6 +23,8 @@ REGISTRY        ?= $(shell echo '$(REPO_URL)' | sed -E 's|^https://github.com/|g
 DEV_NS          := wallet-dev
 DEV_TAG         := dev-$(shell date +%Y%m%d%H%M%S)
 CHART           := deploy/charts/go-service
+# Local ports for UIs; 3000 is often taken by another Grafana.
+GRAFANA_PORT    ?= 3300
 
 .PHONY: help
 help: ## List targets
@@ -139,9 +141,9 @@ smoke: ## Assert quote-prober in wallet-dev reports successful quotes
 	hack/smoke.sh $(KCTX) $(DEV_NS)
 
 .PHONY: ui
-ui: ## Port-forward Grafana to localhost:3000 (admin password: see the command printed first)
+ui: ## Port-forward Grafana to localhost:$(GRAFANA_PORT) (admin password: see the command printed first)
 	@echo "Grafana admin password: $(KUBECTL) -n monitoring get secret kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d"
-	$(KUBECTL) -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
+	$(KUBECTL) -n monitoring port-forward svc/kube-prometheus-stack-grafana $(GRAFANA_PORT):80
 
 .PHONY: down
 down: ## Delete the kind cluster
