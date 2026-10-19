@@ -18,8 +18,10 @@ crds:
   migration: { enabled: false }
 webhooksCleanup: { enabled: false }
 
-# The policies.kyverno.io CRDs otherwise render "labels: {}", which server-side apply drops, so
-# Argo CD would report them OutOfSync forever. Any non-empty label set avoids it.
+# The policies.kyverno.io CRDs otherwise render empty "labels: {}" and "annotations: {}"; with those,
+# Argo CD's tracking annotation never lands on them and they stay OutOfSync forever. Non-empty maps fix it.
 kyverno-api:
   labels:
     app.kubernetes.io/part-of: kyverno
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true
