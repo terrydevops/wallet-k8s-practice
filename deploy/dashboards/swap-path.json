@@ -2,11 +2,12 @@
   "uid": "swap-path",
   "title": "Swap path \u2014 quote prober",
   "tags": [
-    "wallet-k8s-practice"
+    "wallet-k8s-practice",
+    "slo"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-3h",
@@ -59,12 +60,283 @@
         },
         "refresh": 2,
         "allValue": ".*"
+      },
+      {
+        "name": "slo_availability",
+        "type": "constant",
+        "query": "0.99",
+        "hide": 2,
+        "label": "availability SLO target"
       }
     ]
   },
   "panels": [
     {
-      "id": 1,
+      "type": "row",
+      "title": "Service level",
+      "collapsed": false,
+      "panels": [],
+      "description": "SLOs of the quote path in this environment. Window: 24h, because the lab Prometheus keeps 2 days; production would use 28 days. Targets are lab choices, not a vendor SLA.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "id": 1
+    },
+    {
+      "type": "stat",
+      "title": "Availability SLI (target 99%)",
+      "description": "Share of quote probes that returned a usable quote over 24h. Every failure counts, including upstream errors and client-side throttling: a user would not get a quote either way.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.99
+              },
+              {
+                "color": "green",
+                "value": 0.995
+              }
+            ]
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(swap_probe_total{step=\"quote\",result=\"ok\",namespace=~\"$namespace\"}[1d])) / sum(rate(swap_probe_total{step=\"quote\",namespace=~\"$namespace\"}[1d]))",
+          "legendFormat": "availability"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 8,
+        "h": 5
+      },
+      "id": 2
+    },
+    {
+      "type": "stat",
+      "title": "Error budget remaining",
+      "description": "Of the 1% of quotes allowed to fail over 24h, the share not used yet. Below 0 means the SLO is missed.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.25
+              },
+              {
+                "color": "green",
+                "value": 0.5
+              }
+            ]
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1 - (1 - (sum(rate(swap_probe_total{step=\"quote\",result=\"ok\",namespace=~\"$namespace\"}[1d])) / sum(rate(swap_probe_total{step=\"quote\",namespace=~\"$namespace\"}[1d])))) / (1 - $slo_availability)",
+          "legendFormat": "budget left"
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 8,
+        "h": 5
+      },
+      "id": 3
+    },
+    {
+      "type": "stat",
+      "title": "Latency SLI: quotes under 2s (target 99%)",
+      "description": "Share of quote probes that finished within 2s (a histogram bucket boundary) over 24h, including time spent in the client rate limiter.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.99
+              },
+              {
+                "color": "green",
+                "value": 0.995
+              }
+            ]
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(swap_probe_duration_seconds_bucket{step=\"quote\",le=\"2.0\",namespace=~\"$namespace\"}[1d])) / sum(rate(swap_probe_duration_seconds_count{step=\"quote\",namespace=~\"$namespace\"}[1d]))",
+          "legendFormat": "under 2s"
+        }
+      ],
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 8,
+        "h": 5
+      },
+      "id": 4
+    },
+    {
+      "type": "timeseries",
+      "title": "Error budget burn rate",
+      "description": "1 = the budget lasts exactly the SLO window. The usual multi-window alert levels: 14.4 over 1h (2% of a 30-day budget in an hour, page) and 6 over 6h (ticket).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 6
+              },
+              {
+                "color": "red",
+                "value": 14.4
+              }
+            ]
+          },
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(1 - (sum(rate(swap_probe_total{step=\"quote\",result=\"ok\",namespace=~\"$namespace\"}[1h])) / sum(rate(swap_probe_total{step=\"quote\",namespace=~\"$namespace\"}[1h])))) / (1 - $slo_availability)",
+          "legendFormat": "1h"
+        },
+        {
+          "refId": "B",
+          "expr": "(1 - (sum(rate(swap_probe_total{step=\"quote\",result=\"ok\",namespace=~\"$namespace\"}[6h])) / sum(rate(swap_probe_total{step=\"quote\",namespace=~\"$namespace\"}[6h])))) / (1 - $slo_availability)",
+          "legendFormat": "6h"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 8
+      },
+      "id": 5
+    },
+    {
+      "type": "row",
+      "title": "Probe health",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 1
+      },
+      "id": 6
+    },
+    {
+      "id": 7,
       "type": "stat",
       "title": "Quote success ratio (1h)",
       "datasource": {
@@ -73,7 +345,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 15,
         "w": 12,
         "h": 5
       },
@@ -118,7 +390,7 @@
       ]
     },
     {
-      "id": 2,
+      "id": 8,
       "type": "stat",
       "title": "Seconds since last successful quote",
       "datasource": {
@@ -127,7 +399,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 0,
+        "y": 15,
         "w": 12,
         "h": 5
       },
@@ -172,7 +444,7 @@
       ]
     },
     {
-      "id": 3,
+      "id": 9,
       "type": "timeseries",
       "title": "Probes by result",
       "datasource": {
@@ -181,7 +453,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 20,
         "w": 12,
         "h": 8
       },
@@ -212,7 +484,7 @@
       ]
     },
     {
-      "id": 4,
+      "id": 10,
       "type": "timeseries",
       "title": "p95 latency by step",
       "datasource": {
@@ -221,7 +493,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 5,
+        "y": 20,
         "w": 12,
         "h": 8
       },
@@ -252,7 +524,157 @@
       ]
     },
     {
-      "id": 5,
+      "type": "row",
+      "title": "Upstream API",
+      "collapsed": false,
+      "panels": [],
+      "description": "Measured by the HTTP client, below the rate limiter: what the aggregator itself does. Not filtered by scenario (the client does not know it).",
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 24,
+        "h": 1
+      },
+      "id": 11
+    },
+    {
+      "type": "timeseries",
+      "title": "Upstream p95 latency by endpoint (HTTP only)",
+      "description": "Time on the wire to the aggregator, without the wait in the client rate limiter. Compare with 'p95 latency by step' above: a gap means we are queueing, not the API being slow.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, name) (rate(httpclient_request_duration_seconds_bucket{name=~\"route|route_step\",namespace=~\"$namespace\"}[5m])))",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 8,
+        "h": 8
+      },
+      "id": 12
+    },
+    {
+      "type": "timeseries",
+      "title": "Upstream requests by status",
+      "description": "Status class per endpoint as seen by the HTTP client; 'error' means no HTTP response (timeout, connection error).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (name, status) (rate(httpclient_request_total{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{name}} {{status}}"
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 29,
+        "w": 8,
+        "h": 8
+      },
+      "id": 13
+    },
+    {
+      "type": "timeseries",
+      "title": "Client rate-limiter wait (avg per step)",
+      "description": "Average step time minus average HTTP time of its endpoint (quote = route, build_tx = route/step). What is left is mostly the wait for a token in the client rate limiter (AMBER_RPS).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (step) (rate(swap_probe_duration_seconds_sum{namespace=~\"$namespace\"}[15m])) / sum by (step) (rate(swap_probe_duration_seconds_count{namespace=~\"$namespace\"}[15m])) - on (step) label_replace(label_replace(sum by (name) (rate(httpclient_request_duration_seconds_sum{name=~\"route|route_step\",namespace=~\"$namespace\"}[15m])) / sum by (name) (rate(httpclient_request_duration_seconds_count{name=~\"route|route_step\",namespace=~\"$namespace\"}[15m])), \"step\", \"quote\", \"name\", \"route\"), \"step\", \"build_tx\", \"name\", \"route_step\")",
+          "legendFormat": "{{step}}"
+        }
+      ],
+      "gridPos": {
+        "x": 16,
+        "y": 29,
+        "w": 8,
+        "h": 8
+      },
+      "id": 14
+    },
+    {
+      "type": "row",
+      "title": "Swap quality",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 1
+      },
+      "id": 15
+    },
+    {
+      "id": 16,
       "type": "timeseries",
       "title": "Winning provider (quotes per hour)",
       "datasource": {
@@ -261,7 +683,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 13,
+        "y": 38,
         "w": 12,
         "h": 8
       },
@@ -292,7 +714,7 @@
       ]
     },
     {
-      "id": 6,
+      "id": 17,
       "type": "timeseries",
       "title": "Routes offered",
       "datasource": {
@@ -301,7 +723,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 13,
+        "y": 38,
         "w": 12,
         "h": 8
       },
@@ -332,7 +754,7 @@
       ]
     },
     {
-      "id": 7,
+      "id": 18,
       "type": "timeseries",
       "title": "Expected output of best route (smallest units)",
       "datasource": {
@@ -341,7 +763,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 21,
+        "y": 46,
         "w": 12,
         "h": 8
       },
@@ -372,7 +794,7 @@
       ]
     },
     {
-      "id": 8,
+      "id": 19,
       "type": "timeseries",
       "title": "Price impact incl. fees (USD out / USD in - 1)",
       "datasource": {
@@ -381,7 +803,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 21,
+        "y": 46,
         "w": 12,
         "h": 8
       },
@@ -410,6 +832,19 @@
           "legendFormat": "{{scenario}}"
         }
       ]
+    }
+  ],
+  "description": "One service, top to bottom: is it meeting its SLO, is the probe healthy, is the upstream API the cause, what are users quoted. Pods and resources: link 'Kubernetes: pods in this environment'.",
+  "links": [
+    {
+      "type": "link",
+      "title": "Kubernetes: pods in this environment",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": true,
+      "url": "/d/85a562078cdf77779eaa1add43ccec1e/?var-datasource=${datasource}&var-namespace=${namespace}",
+      "tooltip": "Built-in kube-prometheus-stack dashboard 'Kubernetes / Compute Resources / Namespace (Pods)'"
     }
   ]
 }

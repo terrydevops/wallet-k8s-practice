@@ -1,6 +1,7 @@
 # Grafana dashboards, installed once per cluster into the monitoring namespace (not per environment:
 # each environment is a value of the dashboard's "environment" variable). The Grafana sidecar picks up
-# ConfigMaps labelled grafana_dashboard=1.
+# ConfigMaps labelled grafana_dashboard=1 and files them under the folder named by grafana_folder;
+# the chart's built-in Kubernetes dashboards live in their own folder, "Kubernetes".
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: monitoring
@@ -9,6 +10,8 @@ generatorOptions:
   labels:
     grafana_dashboard: "1"
     app.kubernetes.io/part-of: wallet-k8s-practice
+  annotations:
+    grafana_folder: Wallet
 configMapGenerator:
   - name: dashboard-swap-path
     files:

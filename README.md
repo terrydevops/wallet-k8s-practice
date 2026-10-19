@@ -28,7 +28,7 @@ On a local kind cluster (Prometheus Operator, Grafana dashboard, mock API by def
 make platform            # kind cluster "wallet-k8s-practice" + kube-prometheus-stack (~2 min)
 make dev                 # inner loop: build, kind load, helm install mock + prober into wallet-local
 make smoke               # asserts successful quotes are being recorded
-make ui                  # Grafana on localhost:3300 (GRAFANA_PORT), dashboard "Swap path — quote prober"
+make ui                  # Grafana on localhost:3300 (GRAFANA_PORT), folder Wallet, "Swap path — quote prober"
 make dev REAL=1          # same, against the real API with the key from .env
 make down                # delete the cluster
 ```
@@ -71,12 +71,12 @@ apps/go/
 .github/workflows/ci.yml   tidy, vet, race tests, golangci-lint, image build + Trivy, helm lint + kubeconform,
                            gitleaks, Trivy fs
 deploy/bootstrap/          kind cluster (node image pinned by digest)
-deploy/platform-values/    kube-prometheus-stack values
+deploy/platform-values/    kube-prometheus-stack and Argo CD values
 deploy/charts/go-service/  one chart for both Go binaries: Deployment (restricted PSS), Service,
                            ServiceMonitor, scenarios ConfigMap; strict values schema
-deploy/dashboards/         Grafana dashboard, installed once into monitoring; "environment" variable picks dev/staging/prod
+deploy/dashboards/         Grafana dashboard (folder Wallet), installed once into monitoring; "environment" picks the namespace
 deploy/apps/               per-app defaults shared by every environment
-deploy/envs/{dev,staging,prod}/  namespace, version.yaml (staging/prod) and thin per-app overrides
+deploy/envs/{dev,staging,prod}/  namespace, version.yaml and thin per-app overrides
 hack/                      secret.sh (never prints values), smoke.sh, render.sh, check-env-values.py
 ```
 
@@ -92,6 +92,22 @@ hack/                      secret.sh (never prints values), smoke.sh, render.sh,
 | `swap_quote_amount_out` | aggregator, scenario | expected output, smallest units |
 | `swap_quote_price_impact_ratio` | aggregator, scenario | USD out / USD in - 1, fees included; -0.007 = 0.7% lost |
 | `httpclient_request_total`, `httpclient_request_duration_seconds` | aggregator, url, method, name, status | from the go-libs HTTP client |
+
+## Dashboard
+
+"Swap path — quote prober", one environment at a time, read top to bottom:
+
+| Row | Answers |
+|---|---|
+| Service level | Is the quote path meeting its SLOs? Availability and latency (under 2s) SLIs, error budget left, burn rate over 1h and 6h. 24h window: the lab Prometheus keeps 2 days |
+| Probe health | Success per scenario, time since the last good quote, results, p95 per step |
+| Upstream API | Is the aggregator the cause? HTTP-only latency and status per endpoint, and the time spent waiting in the client rate limiter |
+| Swap quality | What a user would be quoted: winning provider, routes, amount out, price impact |
+
+Grafana folders separate ownership: **Kubernetes** holds the dashboards that ship with
+kube-prometheus-stack (upgraded with the chart, never edited); **Wallet** holds the service dashboards
+from this repo. The dashboard links to "Kubernetes / Compute Resources / Namespace (Pods)" for the same
+namespace. Both are provisioned from ConfigMaps; the UI cannot save them; change the JSON in git.
 
 ## Configuration
 

@@ -33,6 +33,14 @@ grafana:
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: ALL
+      # Folders come from a ConfigMap annotation: the chart's own Kubernetes dashboards go to
+      # "Kubernetes" (owned by the chart, upgraded with it, never edited); service dashboards set
+      # grafana_folder in their own repo (deploy/dashboards: "Wallet").
+      folderAnnotation: grafana_folder
+      annotations:
+        grafana_folder: Kubernetes
+      provider:
+        foldersFromFilesStructure: true
   # Grafana 13 builds its search index in memory; 384Mi was OOMKilled on the first dashboard load.
   resources:
     requests: { cpu: 50m, memory: 256Mi }
