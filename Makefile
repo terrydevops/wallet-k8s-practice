@@ -83,8 +83,10 @@ render: ## Render every app in every environment into build/rendered/<env>/<app>
 chart-check: render ## helm lint + kubeconform (with CRD schemas) on every rendered environment and the dashboards
 	helm lint --strict $(CHART) -f deploy/apps/quote-prober.yaml >&2
 	helm lint --strict deploy/argocd --set repoURL=https://github.com/o/r,registry=ghcr.io/o/r >&2
+	helm lint --strict deploy/policies --set repoURL=https://github.com/o/r,registry=ghcr.io/o/r >&2
 	{ cat build/rendered/*/*.yaml; echo '---'; kubectl kustomize deploy/dashboards; echo '---'; \
-	  helm template root deploy/argocd --set repoURL=https://github.com/o/r,registry=ghcr.io/o/r; } | docker run --rm -i ghcr.io/yannh/kubeconform:$(KUBECONFORM_VER) -strict -summary \
+	  helm template root deploy/argocd --set repoURL=https://github.com/o/r,registry=ghcr.io/o/r; echo '---'; \
+	  helm template policies deploy/policies --set repoURL=https://github.com/o/r,registry=ghcr.io/o/r; } | docker run --rm -i ghcr.io/yannh/kubeconform:$(KUBECONFORM_VER) -strict -summary \
 	  -schema-location default \
 	  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
 

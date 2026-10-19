@@ -127,6 +127,23 @@
         "type": "string",
         "pattern": "^sha256:[a-f0-9]{64}$"
       }
+    },
+    "postDeployCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "maxAge": {
+          "type": "string",
+          "pattern": "^[0-9]+(s|m)$"
+        },
+        "timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(s|m)$"
+        }
+      }
     }
   },
   "additionalProperties": false

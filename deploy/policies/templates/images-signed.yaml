@@ -1,0 +1,48 @@
+{{- $registry := required "registry is required" .Values.registry -}}
+{{- $repo := required "repoURL is required" .Values.repoURL | trimPrefix "https://" | trimSuffix ".git" -}}
+# Kyverno: an image from the registry runs only with a keyless cosign signature made by this repo's
+# release workflow on a vX.Y.Z tag (the identity in the Fulcio certificate, logged in Rekor).
+# Anything else from the registry - a branch build, a single-platform child digest, a re-tag - is
+# denied. Fail-closed: if Kyverno is down, Pods in these namespaces are not admitted.
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: wallet-images-signed-by-release
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail
+  webhookConfiguration:
+    timeoutSeconds: 20
+  evaluation:
+    background:
+      enabled: false
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: {{- toYaml .Values.namespaces | nindent 12 }}
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  matchImageReferences:
+    - glob: {{ printf "%s/*" $registry | quote }}
+  attestors:
+    - name: release
+      cosign:
+        keyless:
+          identities:
+            - issuer: https://token.actions.githubusercontent.com
+              subjectRegExp: {{ printf "^https://%s/\\.github/workflows/release\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$" (regexQuoteMeta $repo) | quote }}
+        ctlog:
+          url: https://rekor.sigstore.dev
+  validationConfigurations:
+    required: true
+    verifyDigest: true
+    mutateDigest: false
+  validations:
+    - expression: >-
+        images.containers.map(image, verifyImageSignatures(image, [attestors.release])).all(e, e > 0)
+      message: image is not signed by this repository's release workflow on a vX.Y.Z tag

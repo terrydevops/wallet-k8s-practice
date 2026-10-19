@@ -1,0 +1,7 @@
+# Set by the root app from the git remote, like deploy/argocd, so a fork enforces its own releases.
+# repoURL: https://github.com/<owner>/wallet-k8s-practice
+repoURL: ""
+# registry: ghcr.io/<owner>/wallet-k8s-practice (lower case)
+registry: ""
+# Namespaces that may only run released, signed images. wallet-local (make dev) is not one of them.
+namespaces: [wallet-dev, wallet-staging, wallet-prod]

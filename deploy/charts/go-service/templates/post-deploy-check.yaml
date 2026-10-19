@@ -1,0 +1,62 @@
+{{- if .Values.postDeployCheck.enabled }}
+# Runs after every install/upgrade (Argo CD: PostSync). Same image as the service, so the check is
+# released and signed with it. Its pod labels differ from the Service selector on purpose.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "go-service.name" . }}-verify
+  labels: {{- include "go-service.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation # keep the last run for its logs
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 360
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "go-service.name" . }}-verify
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/part-of: wallet-k8s-practice
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: verify
+          image: {{ include "go-service.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - verify
+            - -url=http://{{ include "go-service.name" . }}:{{ .Values.port }}/metrics
+            - -max-age={{ .Values.postDeployCheck.maxAge }}
+            - -timeout={{ .Values.postDeployCheck.timeout }}
+          {{- if .Values.scenarios }}
+          env:
+            - name: SCENARIOS_FILE
+              value: /etc/scenarios/scenarios.yaml
+          {{- end }}
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 32Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          {{- if .Values.scenarios }}
+          volumeMounts:
+            - name: scenarios
+              mountPath: /etc/scenarios
+              readOnly: true
+          {{- end }}
+      {{- if .Values.scenarios }}
+      volumes:
+        - name: scenarios
+          configMap:
+            name: {{ include "go-service.name" . }}-scenarios
+      {{- end }}
+{{- end }}

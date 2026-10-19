@@ -27,5 +27,7 @@ spec:
       kind: Service
     - group: apps
       kind: Deployment
+    - group: batch
+      kind: Job # post-deploy check (PostSync hook)
     - group: monitoring.coreos.com
       kind: ServiceMonitor

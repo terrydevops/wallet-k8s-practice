@@ -10,7 +10,7 @@ How this lab models dev / staging / prod, and why. Based on common Argo CD pract
 | Umbrella chart, copied charts, or one shared chart? | **One shared chart, one release per service** | Services are few and alike. Umbrella charts add a dependency layer and tie release lifecycles together; copies drift |
 | How are environments different? | **Layered values: app defaults → thin environment file → secrets via External Secrets** | Each layer owns one kind of setting |
 | What is a version? | **One semver tag = one image digest + one chart version** | Never deploy an untested combination of chart and image |
-| How does a version move? | **dev on every release (bot commit), staging by reviewed PR, prod by approval** — CI bot now, **Kargo** later | Promotion is a reviewed git change; prod never syncs something staging did not run |
+| How does a version move? | **dev on every release (bot PR, merged once checks pass), staging by reviewed PR, prod by approval** — CI bot now, **Kargo** later | Promotion is a reviewed git change; prod never syncs something staging did not run |
 | How do reviewers see the real result? | **Rendered diff in CI**, later Argo CD **Source Hydrator** | Layered values hide the final manifest; the diff shows it |
 
 ## Layout
@@ -40,8 +40,9 @@ deploy/
 git tag v1.4.2
   └─ release.yml: build images → scan → push → sign → bake digests into chart → push chart 1.4.2 (OCI)
 
-Stage 1 (now): CI commits envs/dev/version.yaml = 1.4.2 to main → Argo CD syncs dev
-               CI opens a PR that sets envs/staging/version.yaml = 1.4.2 → merge → Argo CD syncs staging
+Stage 1 (now): CI opens a PR per environment setting envs/<env>/version.yaml = 1.4.2 and runs the checks on it
+               dev: auto-merged once the checks pass → Argo CD syncs dev → PostSync post-deploy check
+               staging: merged by a person → Argo CD syncs staging → PostSync post-deploy check
                (prod: same, by a reviewed PR and a manual sync; not deployed in this lab yet)
 
 Stage 2 (later): Kargo (operator) does the same with CRDs:
@@ -66,3 +67,15 @@ Stage 2 (later): Kargo (operator) does the same with CRDs:
 - Argo CD docs, Source Hydrator — rendered manifests (beta since v3.5)
 - Kargo docs, Concepts — Warehouse, Freight, Stage, Promotion
 - The New Stack, The super Helm chart: to deploy or not to deploy — shared vs per-service charts
+
+## Guardrails between git and a running pod
+
+| Gate | Where | Stops |
+|---|---|---|
+| Ruleset on `main` | GitHub | Any change, bot included, that is not a pull request with the four CI checks green; force pushes and deletion |
+| Release workflow | `release.yml` | Images built from a tag that is not on main; HIGH/CRITICAL CVEs (Trivy) |
+| `wallet-images-from-release` | ValidatingAdmissionPolicy (built in) | Images from another registry, or not pinned by digest, in wallet-dev/staging/prod |
+| `wallet-images-signed-by-release` | Kyverno ImageValidatingPolicy | Images from the registry without a cosign keyless signature by `release.yml` on a `vX.Y.Z` tag |
+| Post-deploy check | PostSync hook Job (`quote-prober verify`) | A release that is Healthy to Kubernetes but cannot get a quote: the sync is marked failed |
+
+The admission policies are fail-closed and do not cover wallet-local, where `make dev` runs local builds.

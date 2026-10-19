@@ -1,0 +1,54 @@
+{{- $registry := required "registry is required" .Values.registry -}}
+# Built into Kubernetes (no Kyverno needed): in the environments, every container image must come
+# from this repo's registry and be pinned by digest. Checked on Deployments and Jobs as well as Pods,
+# so a bad image fails the Argo CD sync itself instead of a ReplicaSet that never gets pods.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: wallet-images-from-release
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [deployments]
+      - apiGroups: [batch]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [jobs]
+  variables:
+    - name: podSpec
+      expression: "object.kind == 'Pod' ? object.spec : object.spec.template.spec"
+    - name: images
+      expression: >-
+        variables.podSpec.containers.map(c, c.image) +
+        (has(variables.podSpec.initContainers) ? variables.podSpec.initContainers.map(c, c.image) : [])
+    - name: rejected
+      expression: >-
+        variables.images.filter(i, !(i.startsWith({{ printf "%s/" $registry | squote }}) && i.contains('@sha256:')))
+  validations:
+    - expression: size(variables.rejected) == 0
+      messageExpression: >-
+        'only released images pinned by digest ({{ $registry }}/<app>@sha256:...) may run here; rejected: ' +
+        variables.rejected.join(', ')
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: wallet-images-from-release
+spec:
+  policyName: wallet-images-from-release
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: {{- toYaml .Values.namespaces | nindent 12 }}
