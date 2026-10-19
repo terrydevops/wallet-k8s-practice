@@ -37,6 +37,10 @@ secrets-scan: ## gitleaks over the git history
 	@if command -v gitleaks >/dev/null; then gitleaks git --redact .; \
 	else docker run --rm -v "$(CURDIR)":/repo ghcr.io/gitleaks/gitleaks:$(GITLEAKS_VER) git --redact /repo; fi
 
+.PHONY: hooks
+hooks: ## Enable the repo's git hooks (pre-commit secret scan)
+	git config core.hooksPath .githooks
+
 .PHONY: tidy-check
 tidy-check: ## Fail if go.mod/go.sum are not tidy
 	cd $(GO_DIR) && go mod tidy -diff

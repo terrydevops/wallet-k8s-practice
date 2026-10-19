@@ -10,6 +10,7 @@ without credentials. CI runs from the first commit.
 ## Quickstart
 
 ```bash
+make hooks               # once per clone: pre-commit blocks secrets before they reach a commit
 make run MOCK=1          # mock API + prober, no credentials needed
 curl -s localhost:8080/metrics | grep '^swap_'
 ```

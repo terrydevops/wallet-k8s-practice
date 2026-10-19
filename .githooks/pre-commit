@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Blocks a commit that would add a secret. Enabled by `make hooks` (sets core.hooksPath).
+#  1. gitleaks over the staged changes (local binary, else the pinned container).
+#  2. Every non-empty value in .env must not appear in the staged changes. This catches keys that
+#     have no recognisable format, which gitleaks' generic rule can miss. Values are never printed.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+gitleaks_ver=v8.30.1 # keep in sync with GITLEAKS_VER in the Makefile
+if command -v gitleaks >/dev/null; then
+  gitleaks git --pre-commit --staged --redact --no-banner --log-level=warn .
+elif command -v docker >/dev/null; then
+  git diff --cached --binary | docker run --rm -i -v "$PWD/.gitleaks.toml":/.gitleaks.toml:ro \
+    "ghcr.io/gitleaks/gitleaks:$gitleaks_ver" stdin --config /.gitleaks.toml --redact --no-banner --log-level=warn
+else
+  echo "pre-commit: neither gitleaks nor docker found; cannot scan for secrets" >&2
+  exit 1
+fi
+
+if [[ -f .env ]]; then
+  added=$(git diff --cached --no-color --unified=0 | grep -E '^\+' | grep -vE '^\+\+\+ ' || true)
+  while IFS='=' read -r key value; do
+    [[ $key =~ ^[A-Z_][A-Z0-9_]*$ && ${#value} -ge 8 ]] || continue
+    if grep -qF -- "$value" <<<"$added"; then
+      echo "pre-commit: the value of $key from .env is in the staged changes; commit blocked" >&2
+      exit 1
+    fi
+  done < <(grep -vE '^\s*#' .env)
+fi
