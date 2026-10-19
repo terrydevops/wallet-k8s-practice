@@ -20,7 +20,13 @@ alertmanager:
       limits: { memory: 128Mi }
 
 grafana:
-  # Initial admin password is generated into a Secret; `make ui` prints how to read it.
+  # Admin credentials come from a Secret outside the chart (created once by `make platform`). If the
+  # chart generated the password, every Argo CD render would make a new one: Grafana would restart
+  # and the password would change on each sync.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
   sidecar:
     dashboards:
       enabled: true

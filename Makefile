@@ -101,6 +101,9 @@ cluster: ## Create the kind cluster (if missing) and the namespaces
 platform: cluster ## Bootstrap kube-prometheus-stack on a new cluster (afterwards Argo CD owns it; change via git)
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1 || true
 	helm repo update prometheus-community >/dev/null
+	$(KUBECTL) create namespace monitoring --dry-run=client -o yaml | $(KUBECTL) apply -f - >/dev/null
+	@$(KUBECTL) -n monitoring get secret grafana-admin >/dev/null 2>&1 || $(KUBECTL) -n monitoring create secret generic grafana-admin \
+	  --from-literal=admin-user=admin --from-literal=admin-password="$$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)" >/dev/null
 	$(HELM) upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
 	  --version $(KPS_VERSION) -n monitoring --create-namespace \
 	  -f deploy/platform-values/kube-prometheus-stack.yaml --wait --timeout 10m
@@ -143,7 +146,7 @@ smoke: ## Assert quote-prober in wallet-dev reports successful quotes
 
 .PHONY: ui
 ui: ## Port-forward Grafana to localhost:$(GRAFANA_PORT) (admin password: see the command printed first)
-	@echo "Grafana admin password: $(KUBECTL) -n monitoring get secret kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d"
+	@echo "Grafana admin password: $(KUBECTL) -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d | pbcopy"
 	$(KUBECTL) -n monitoring port-forward svc/kube-prometheus-stack-grafana $(GRAFANA_PORT):80
 
 .PHONY: down
