@@ -1,0 +1,201 @@
+name: release
+
+# git tag vX.Y.Z on a commit of main →
+#   images: multi-arch build (amd64 + arm64), push, scan, SBOM + provenance, keyless cosign signature
+#   chart:  go-service X.Y.Z with every image digest baked in, pushed to GHCR as OCI, signed
+#   promote: pull request setting deploy/envs/staging/version.yaml to X.Y.Z; Argo CD syncs once merged
+# One version therefore always means one chart plus the exact images it was released with.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    name: check tag
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      registry: ${{ steps.v.outputs.registry }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: v
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ $TAG =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]] || { echo "::error::$TAG is not vX.Y.Z"; exit 1; }
+          # Only commits that passed review on main are released.
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$TAG is not on main"; exit 1; }
+          echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          echo "registry=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+  images:
+    name: image (${{ matrix.cmd }})
+    needs: meta
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # keyless signing with the workflow's OIDC identity
+    strategy:
+      matrix:
+        cmd: [quote-prober, mock-quote-api]
+    env:
+      IMAGE: ${{ needs.meta.outputs.registry }}/${{ matrix.cmd }}
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: apps/go
+          build-args: CMD=${{ matrix.cmd }}
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.IMAGE }}:${{ env.VERSION }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+          sbom: true
+          provenance: mode=max
+          push: true
+
+      - name: image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: sign
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "$IMAGE@$DIGEST"
+
+      - name: record digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p digests && echo "$DIGEST" > "digests/${{ matrix.cmd }}"
+          echo "- \`$IMAGE@$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digest-${{ matrix.cmd }}
+          path: digests/${{ matrix.cmd }}
+          retention-days: 7
+
+  chart:
+    name: chart
+    needs: [meta, images]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      REGISTRY: ${{ needs.meta.outputs.registry }}
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.15.0
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+
+      - name: bake digests into the chart
+        working-directory: deploy/charts/go-service
+        run: |
+          {
+            echo "digests:"
+            for f in ../../../digests/*; do echo "  $(basename "$f"): $(cat "$f")"; done
+          } > digests.yaml
+          grep -q '^digests: {}$' values.yaml
+          sed -i '/^digests: {}$/{r digests.yaml
+          d}' values.yaml
+          rm digests.yaml
+          { echo '```yaml'; sed -n '/^digests:/,/^$/p' values.yaml; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: package, lint, push
+        id: push
+        run: |
+          helm package deploy/charts/go-service --version "$VERSION" --app-version "$VERSION" -d build
+          helm lint --strict "build/go-service-$VERSION.tgz" -f deploy/apps/quote-prober.yaml
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push "build/go-service-$VERSION.tgz" "oci://$REGISTRY/charts" 2>&1 | tee push.log
+          echo "digest=$(grep -oE 'sha256:[a-f0-9]{64}' push.log | head -1)" >> "$GITHUB_OUTPUT"
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: sign chart
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+          cosign sign --yes "$REGISTRY/charts/go-service@$DIGEST"
+          echo "chart: \`$REGISTRY/charts/go-service:$VERSION\` (\`$DIGEST\`)" >> "$GITHUB_STEP_SUMMARY"
+
+  promote:
+    name: promote to staging (pull request)
+    needs: [meta, chart]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      BRANCH: promote/staging-${{ needs.meta.outputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: open the pull request
+        run: |
+          sed -i -E "s/^version:.*/version: \"$VERSION\"/" deploy/envs/staging/version.yaml
+          git diff --exit-code --quiet && { echo "staging already runs $VERSION"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git commit -am "deploy(staging): $VERSION"
+          git push origin "$BRANCH"
+          body="Release $VERSION: images and chart built, scanned and signed by run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Argo CD syncs staging after merge."
+          if ! gh pr create --base main --head "$BRANCH" --title "deploy(staging): $VERSION" --body "$body"; then
+            echo "::warning::could not open the PR (is 'Allow GitHub Actions to create pull requests' on?); open it from the branch"
+            echo "Open the promotion PR: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/main...$BRANCH" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -9,6 +9,10 @@ image:
   tag: ""
   pullPolicy: IfNotPresent
 
+# Digest per cmd, written by release.yml into the packaged chart so a chart version pins every image
+# it can run. Used when image.digest is empty. Empty in git: local builds use the tag.
+digests: {}
+
 replicas: 1
 port: 8080
 

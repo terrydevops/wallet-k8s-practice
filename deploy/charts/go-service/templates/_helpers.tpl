@@ -15,10 +15,12 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- end -}}
 
-{{/* repository@digest when a digest is pinned, else repository:tag (tag defaults to appVersion). */}}
+{{/* repository@digest when a digest is pinned (image.digest, else digests[cmd] from the release),
+     else repository:tag (tag defaults to appVersion). */}}
 {{- define "go-service.image" -}}
-{{- if .Values.image.digest -}}
-{{ .Values.image.repository }}@{{ .Values.image.digest }}
+{{- $digest := .Values.image.digest | default (get .Values.digests .Values.cmd) -}}
+{{- if $digest -}}
+{{ .Values.image.repository }}@{{ $digest }}
 {{- else -}}
 {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
 {{- end -}}
