@@ -101,7 +101,7 @@ hack/                      secret.sh (never prints values), smoke.sh, render.sh,
 |---|---|
 | Service level | Is the quote path meeting its SLOs? Availability and latency (under 2s) SLIs, error budget left, burn rate over 1h and 6h. 24h window: the lab Prometheus keeps 2 days |
 | Probe health | Success per scenario, time since the last good quote, results, p95 per step |
-| Upstream API | Is the aggregator the cause? HTTP-only latency and status per endpoint, and the time spent waiting in the client rate limiter |
+| Upstream API | Is the aggregator the cause? HTTP-only latency and status per endpoint, time spent waiting in the client rate limiter, and how much of the key's 1 request/s all environments use together |
 | Swap quality | What a user would be quoted: winning provider, routes, amount out, price impact |
 
 Grafana folders separate ownership: **Kubernetes** holds the dashboards that ship with
