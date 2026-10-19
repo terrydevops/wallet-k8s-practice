@@ -14,8 +14,9 @@ CLUSTER         := wallet-k8s-practice
 KCTX            := kind-$(CLUSTER)
 KUBECTL         := kubectl --context $(KCTX)
 HELM            := helm --kube-context $(KCTX)
-KPS_VERSION     := 92.10.1
-ARGOCD_VERSION  := 10.9.2
+# Platform chart versions are read from the GitOps values, so bootstrap and Argo CD never disagree.
+KPS_VERSION     := $(shell sed -n 's/^kubePrometheusStackVersion: *//p' deploy/argocd/values.yaml)
+ARGOCD_VERSION  := $(shell sed -n 's/^argoCDVersion: *//p' deploy/argocd/values.yaml)
 # Git repo Argo CD follows: your own fork by default (origin), so a clone never deploys someone else's main.
 REPO_URL        ?= $(shell git remote get-url origin 2>/dev/null | sed -E 's|^git@github.com:|https://github.com/|; s|\.git$$||')
 # Released images and the OCI chart: ghcr.io/<owner>/<repo>, lower case (as release.yml pushes them).
@@ -97,7 +98,7 @@ cluster: ## Create the kind cluster (if missing) and the namespaces
 	for e in deploy/envs/*/namespace.yaml; do $(KUBECTL) apply -f $$e; done
 
 .PHONY: platform
-platform: cluster ## Install kube-prometheus-stack (Prometheus Operator, Grafana, Alertmanager)
+platform: cluster ## Bootstrap kube-prometheus-stack on a new cluster (afterwards Argo CD owns it; change via git)
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1 || true
 	helm repo update prometheus-community >/dev/null
 	$(HELM) upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
@@ -106,7 +107,7 @@ platform: cluster ## Install kube-prometheus-stack (Prometheus Operator, Grafana
 	$(KUBECTL) apply -k deploy/dashboards
 
 .PHONY: argocd
-argocd: cluster ## Install Argo CD (pull-based CD for staging/prod; dev stays on make dev)
+argocd: cluster ## Bootstrap Argo CD, or break-glass reinstall from the same values (then commit any fix)
 	helm repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
 	helm repo update argo >/dev/null
 	$(HELM) upgrade --install argocd argo/argo-cd --version $(ARGOCD_VERSION) \

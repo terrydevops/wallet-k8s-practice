@@ -1,0 +1,21 @@
+# Cluster add-ons (monitoring, Argo CD itself). Wide on purpose: their charts create CRDs, cluster
+# roles and webhooks in several namespaces. Kept apart from "wallet" so workloads stay narrow.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  description: cluster add-ons managed from git
+  sourceRepos:
+    - {{ .Values.repoURL | quote }}
+    - https://prometheus-community.github.io/helm-charts
+    - https://argoproj.github.io/argo-helm
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"

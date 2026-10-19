@@ -1,0 +1,70 @@
+# Cluster add-ons, adopted from the bootstrap Helm installs (same release names, same values files),
+# so taking them over changes nothing. After adoption, change them only through git; `make platform`
+# and `make argocd` are for a new cluster or break-glass, and any fix made that way is committed next.
+#
+# None of these Applications has the resources finalizer: deleting one leaves its resources running.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: {{ .Values.kubePrometheusStackVersion | quote }}
+      helm:
+        releaseName: kube-prometheus-stack
+        valueFiles:
+          - $values/deploy/platform-values/kube-prometheus-stack.yaml
+    - repoURL: {{ .Values.repoURL | quote }}
+      targetRevision: {{ .Values.targetRevision | quote }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  # The operator's webhook certificates are generated in-cluster, so their caBundle never matches git.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      jqPathExpressions: [".webhooks[]?.clientConfig.caBundle"]
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      jqPathExpressions: [".webhooks[]?.clientConfig.caBundle"]
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions:
+      - ServerSideApply=true # the Prometheus Operator CRDs exceed the client-side apply annotation limit
+      - RespectIgnoreDifferences=true
+---
+# Argo CD managing itself. A bad change here can break the controller that would sync the fix, so:
+#  - no automated sync: an upgrade of Argo CD is a deliberate, watched click (or `argocd app sync argocd`);
+#  - no prune: a resource that disappears from the chart is reported, never deleted automatically;
+#  - break-glass: `make argocd` reinstalls from the same chart version and values file.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: platform
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      targetRevision: {{ .Values.argoCDVersion | quote }}
+      helm:
+        releaseName: argocd
+        valueFiles:
+          - $values/deploy/platform-values/argo-cd.yaml
+    - repoURL: {{ .Values.repoURL | quote }}
+      targetRevision: {{ .Values.targetRevision | quote }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true

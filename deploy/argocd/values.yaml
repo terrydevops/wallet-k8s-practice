@@ -4,3 +4,8 @@ repoURL: ""
 targetRevision: main
 # Registry for released images and the OCI chart: ghcr.io/<owner>/wallet-k8s-practice (lower case).
 registry: ""
+
+# Platform chart versions: the single source for both Argo CD and the bootstrap targets in the Makefile
+# (make platform / make argocd read these lines). Bump here, merge, and Argo CD rolls it out.
+kubePrometheusStackVersion: 92.10.1
+argoCDVersion: 10.9.2
