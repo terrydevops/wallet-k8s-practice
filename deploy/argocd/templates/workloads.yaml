@@ -1,0 +1,21 @@
+{{- /* The ApplicationSet body lives in files/ so its own {{ }} templating needs no Helm escaping. */ -}}
+{{ .Files.Get "files/workloads.yaml"
+  | replace "__REPO_URL__" .Values.repoURL
+  | replace "__REVISION__" .Values.targetRevision
+  | replace "__REGISTRY__" .Values.registry }}
+---
+# Released charts are public OCI artifacts in GHCR; Argo CD needs the registry declared as an OCI
+# Helm repository. No credentials: the packages are public.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-wallet-charts
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  name: wallet-charts
+  type: helm
+  url: {{ printf "%s/charts" .Values.registry | quote }}
+  enableOCI: "true"
+  project: wallet

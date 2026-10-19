@@ -1,0 +1,22 @@
+# The only resource applied by hand (make gitops). Everything else is synced by Argo CD from git.
+# __REPO_URL__ and __REGISTRY__ are filled in from the git remote by the Makefile.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: __REPO_URL__
+    targetRevision: main
+    path: deploy/argocd
+    helm:
+      valuesObject:
+        repoURL: __REPO_URL__
+        registry: __REGISTRY__
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}

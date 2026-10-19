@@ -1,0 +1,69 @@
+# One Application per (environment, app): for every deploy/envs/<env>/version.yaml with a version set,
+# and every deploy/envs/<env>/<app>.yaml in that folder. dev has no version.yaml: it stays on `make dev`.
+#
+# Each Application installs the released chart (OCI, digests baked in) at that version, with values
+# from git at main: apps/<app>.yaml, then envs/<env>/<app>.yaml. prod is never auto-synced.
+#
+# Helm only substitutes the __REPO_URL__ / __REGISTRY__ placeholders; {{ }} is the ApplicationSet's.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: workloads
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: __REPO_URL__
+              revision: __REVISION__
+              pathParamPrefix: env
+              files:
+                - path: deploy/envs/*/version.yaml
+            selector:
+              matchExpressions:
+                - {key: version, operator: NotIn, values: [""]}
+          - git:
+              repoURL: __REPO_URL__
+              revision: __REVISION__
+              pathParamPrefix: app
+              files:
+                - path: "deploy/envs/{{ .env.path.basename }}/*.yaml"
+                - path: "deploy/envs/{{ .env.path.basename }}/namespace.yaml"
+                  exclude: true
+                - path: "deploy/envs/{{ .env.path.basename }}/version.yaml"
+                  exclude: true
+  template:
+    metadata:
+      name: '{{ .env.path.basename }}-{{ trimSuffix ".yaml" .app.path.filename }}'
+      labels:
+        wallet/env: '{{ .env.path.basename }}'
+        wallet/app: '{{ trimSuffix ".yaml" .app.path.filename }}'
+    spec:
+      project: wallet
+      sources:
+        - repoURL: __REGISTRY__/charts
+          chart: go-service
+          targetRevision: '{{ .version }}'
+          helm:
+            releaseName: '{{ trimSuffix ".yaml" .app.path.filename }}'
+            valueFiles:
+              - '$values/deploy/apps/{{ trimSuffix ".yaml" .app.path.filename }}.yaml'
+              - '$values/{{ .app.path.path }}/{{ .app.path.filename }}'
+            parameters:
+              - name: image.repository
+                value: '__REGISTRY__/{{ trimSuffix ".yaml" .app.path.filename }}'
+        - repoURL: __REPO_URL__
+          targetRevision: __REVISION__
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'wallet-{{ .env.path.basename }}'
+  templatePatch: |
+    {{- if ne .env.path.basename "prod" }}
+    spec:
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+    {{- end }}

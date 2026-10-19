@@ -1,0 +1,7 @@
+apiVersion: v2
+name: gitops
+description: >-
+  Root of the app-of-apps. `make gitops` installs it as the "root" Application, which then syncs
+  this chart from git: the project, namespaces, dashboards and the workloads ApplicationSet.
+type: application
+version: 0.1.0

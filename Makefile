@@ -18,6 +18,8 @@ KPS_VERSION     := 92.10.1
 ARGOCD_VERSION  := 10.9.2
 # Git repo Argo CD follows: your own fork by default (origin), so a clone never deploys someone else's main.
 REPO_URL        ?= $(shell git remote get-url origin 2>/dev/null | sed -E 's|^git@github.com:|https://github.com/|; s|\.git$$||')
+# Released images and the OCI chart: ghcr.io/<owner>/<repo>, lower case (as release.yml pushes them).
+REGISTRY        ?= $(shell echo '$(REPO_URL)' | sed -E 's|^https://github.com/|ghcr.io/|' | tr '[:upper:]' '[:lower:]')
 DEV_NS          := wallet-dev
 DEV_TAG         := dev-$(shell date +%Y%m%d%H%M%S)
 CHART           := deploy/charts/go-service
@@ -76,7 +78,9 @@ render: ## Render every app in every environment into build/rendered/<env>/<app>
 .PHONY: chart-check
 chart-check: render ## helm lint + kubeconform (with CRD schemas) on every rendered environment and the dashboards
 	helm lint --strict $(CHART) -f deploy/apps/quote-prober.yaml >&2
-	{ cat build/rendered/*/*.yaml; echo '---'; kubectl kustomize deploy/dashboards; } | docker run --rm -i ghcr.io/yannh/kubeconform:$(KUBECONFORM_VER) -strict -summary \
+	helm lint --strict deploy/argocd --set repoURL=https://github.com/o/r,registry=ghcr.io/o/r >&2
+	{ cat build/rendered/*/*.yaml; echo '---'; kubectl kustomize deploy/dashboards; echo '---'; \
+	  helm template root deploy/argocd --set repoURL=https://github.com/o/r,registry=ghcr.io/o/r; } | docker run --rm -i ghcr.io/yannh/kubeconform:$(KUBECONFORM_VER) -strict -summary \
 	  -schema-location default \
 	  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
 
@@ -106,6 +110,13 @@ argocd: cluster ## Install Argo CD (pull-based CD for staging/prod; dev stays on
 	$(HELM) upgrade --install argocd argo/argo-cd --version $(ARGOCD_VERSION) \
 	  -n argocd --create-namespace -f deploy/platform-values/argo-cd.yaml --wait --timeout 10m
 	@echo "Argo CD installed; it will follow $(REPO_URL)"
+
+.PHONY: gitops
+gitops: argocd ## Hand staging/prod to Argo CD: seed their Secrets, apply the root app-of-apps
+	hack/secret.sh $(KCTX) wallet-staging mock
+	@if [ -f .env ]; then hack/secret.sh $(KCTX) wallet-prod real; \
+	else echo "no .env: wallet-prod gets no credentials; its prober stays unready until 'hack/secret.sh $(KCTX) wallet-prod real'"; fi
+	sed -e 's|__REPO_URL__|$(REPO_URL)|g' -e 's|__REGISTRY__|$(REGISTRY)|g' deploy/bootstrap/root-app.yaml | $(KUBECTL) apply -f -
 
 .PHONY: argocd-ui
 argocd-ui: ## Port-forward Argo CD to localhost:8443 (user admin; password: see the command printed first)

@@ -1,0 +1,29 @@
+# Everything this repo deploys lives in one AppProject that can only read this repo and its chart
+# registry, and only write the wallet-* namespaces and the dashboards in monitoring.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: wallet
+  namespace: argocd
+spec:
+  description: wallet-k8s-practice workloads and their platform glue
+  sourceRepos:
+    - {{ required "repoURL is required" .Values.repoURL | quote }}
+    - {{ printf "%s/charts" (required "registry is required" .Values.registry) | quote }}
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: wallet-*
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor

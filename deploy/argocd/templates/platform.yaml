@@ -1,0 +1,38 @@
+# Namespaces and dashboards come straight from git; they exist before any release does.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: namespaces
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: wallet
+  source:
+    repoURL: {{ .Values.repoURL | quote }}
+    targetRevision: {{ .Values.targetRevision | quote }}
+    path: deploy/envs
+    directory:
+      recurse: true
+      include: "*/namespace.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated: {prune: false, selfHeal: true} # deleting a namespace deletes everything in it
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dashboards
+  namespace: argocd
+spec:
+  project: wallet
+  source:
+    repoURL: {{ .Values.repoURL | quote }}
+    targetRevision: {{ .Values.targetRevision | quote }}
+    path: deploy/dashboards
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
