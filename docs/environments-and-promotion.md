@@ -40,7 +40,7 @@ deploy/
 git tag v1.4.2
   └─ release.yml: build images → scan → push → sign → bake digests into chart → push chart 1.4.2 (OCI)
 
-Stage 1 (now): CI opens a PR per environment setting envs/<env>/version.yaml = 1.4.2 and runs the checks on it
+Stage 1 (now): CI opens a PR per environment setting envs/<env>/version.yaml = 1.4.2 and approves its CI run
                dev: auto-merged once the checks pass → Argo CD syncs dev → PostSync post-deploy check
                staging: merged by a person → Argo CD syncs staging → PostSync post-deploy check
                (prod: same, by a reviewed PR and a manual sync; not deployed in this lab yet)

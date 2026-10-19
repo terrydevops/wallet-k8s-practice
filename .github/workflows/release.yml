@@ -171,8 +171,9 @@ jobs:
 
   # main only changes through pull requests that pass the required checks, bot included:
   #   dev: PR merged automatically once the checks pass;  staging: PR merged by a person.
-  # GITHUB_TOKEN events start no workflows, so each promotion dispatches ci.yml on its branch; the
-  # check runs land on the PR's head commit and satisfy the ruleset.
+  # A PR opened with GITHUB_TOKEN does start ci.yml, but GitHub holds the run for approval
+  # (action_required). Only a pull_request run reports checks on the PR (a dispatched run does not),
+  # so the job approves that run. The review gate is the merge, not the CI run.
   promote:
     name: promote (dev automatically, staging by review)
     needs: [meta, chart]
@@ -180,7 +181,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: write # dispatch ci.yml on the promotion branches
+      actions: write # approve the ci.yml run held on each promotion PR
     env:
       VERSION: ${{ needs.meta.outputs.version }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -209,7 +210,17 @@ jobs:
               echo "Open the $env promotion PR: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/main...$branch" >> "$GITHUB_STEP_SUMMARY"
               continue
             fi
-            gh workflow run ci.yml --ref "$branch"
+            run_id=""
+            for _ in $(seq 24); do
+              run_id=$(gh run list --workflow ci.yml --branch "$branch" --event pull_request --status action_required --json databaseId -q '.[0].databaseId')
+              [ -n "$run_id" ] && break
+              sleep 5
+            done
+            if [ -n "$run_id" ]; then
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/approve"
+            else
+              echo "::notice::no held ci.yml run on $branch; it either started on its own or needs a manual re-run"
+            fi
             if [ "$env" = dev ]; then gh pr merge "$url" --auto --squash --delete-branch; fi
             echo "$env: $url" >> "$GITHUB_STEP_SUMMARY"
           done

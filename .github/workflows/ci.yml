@@ -4,9 +4,6 @@ on:
   pull_request:
   push:
     branches: [main]
-  # Promotion PRs are opened with GITHUB_TOKEN, whose events start no workflows; release.yml
-  # dispatches this workflow on the PR branch so the checks required on main still run.
-  workflow_dispatch:
 
 # Nothing by default; each job asks for what it needs.
 permissions: {}
