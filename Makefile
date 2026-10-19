@@ -15,6 +15,9 @@ KCTX            := kind-$(CLUSTER)
 KUBECTL         := kubectl --context $(KCTX)
 HELM            := helm --kube-context $(KCTX)
 KPS_VERSION     := 92.10.1
+ARGOCD_VERSION  := 10.9.2
+# Git repo Argo CD follows: your own fork by default (origin), so a clone never deploys someone else's main.
+REPO_URL        ?= $(shell git remote get-url origin 2>/dev/null | sed -E 's|^git@github.com:|https://github.com/|; s|\.git$$||')
 DEV_NS          := wallet-dev
 DEV_TAG         := dev-$(shell date +%Y%m%d%H%M%S)
 CHART           := deploy/charts/go-service
@@ -95,6 +98,19 @@ platform: cluster ## Install kube-prometheus-stack (Prometheus Operator, Grafana
 	  --version $(KPS_VERSION) -n monitoring --create-namespace \
 	  -f deploy/platform-values/kube-prometheus-stack.yaml --wait --timeout 10m
 	$(KUBECTL) apply -k deploy/dashboards
+
+.PHONY: argocd
+argocd: cluster ## Install Argo CD (pull-based CD for staging/prod; dev stays on make dev)
+	helm repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
+	helm repo update argo >/dev/null
+	$(HELM) upgrade --install argocd argo/argo-cd --version $(ARGOCD_VERSION) \
+	  -n argocd --create-namespace -f deploy/platform-values/argo-cd.yaml --wait --timeout 10m
+	@echo "Argo CD installed; it will follow $(REPO_URL)"
+
+.PHONY: argocd-ui
+argocd-ui: ## Port-forward Argo CD to localhost:8443 (user admin; password: see the command printed first)
+	@echo "Argo CD admin password: $(KUBECTL) -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
+	$(KUBECTL) -n argocd port-forward svc/argocd-server 8443:80
 
 .PHONY: dev
 dev: ## Build, load into kind, deploy mock + prober to wallet-dev. REAL=1 uses .env and the real API

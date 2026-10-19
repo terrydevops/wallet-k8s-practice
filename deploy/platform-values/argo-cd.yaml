@@ -1,0 +1,50 @@
+# Argo CD (chart argo/argo-cd, version pinned in the Makefile) sized for a laptop kind cluster.
+# Reached by port-forward (make argocd-ui); no ingress, no SSO.
+global:
+  domain: argocd.localhost
+
+configs:
+  params:
+    server.insecure: true # TLS ends at the port-forward; a real cluster terminates TLS at the ingress
+  cm:
+    timeout.reconciliation: 60s # poll git every minute instead of three, so a merge shows up quickly
+    # Report a child Application's health to its parent, so app-of-apps sync waves wait for it.
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil and obj.status.health ~= nil then
+        hs.status = obj.status.health.status
+        if obj.status.health.message ~= nil then
+          hs.message = obj.status.health.message
+        end
+      end
+      return hs
+  rbac:
+    policy.default: role:readonly
+
+dex:
+  enabled: false
+notifications:
+  enabled: false
+
+controller:
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 1Gi}
+repoServer:
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
+server:
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
+applicationSet:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
+redis:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
