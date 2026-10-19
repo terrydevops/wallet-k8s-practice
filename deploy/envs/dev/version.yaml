@@ -1,2 +1,2 @@
 # Release running in dev. Written by release.yml on every tag (no review); staging and prod get it by PR.
-version: "0.3.0"
+version: "0.3.1"
