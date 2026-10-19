@@ -1,8 +1,12 @@
 # One Application per (environment, app): for every deploy/envs/<env>/version.yaml with a version set,
-# and every deploy/envs/<env>/<app>.yaml in that folder. dev has no version.yaml: it stays on `make dev`.
+# and every deploy/envs/<env>/<app>.yaml in that folder. prod is never auto-synced.
 #
-# Each Application installs the released chart (OCI, digests baked in) at that version, with values
-# from git at main: apps/<app>.yaml, then envs/<env>/<app>.yaml. prod is never auto-synced.
+# Each Application installs the released chart (OCI, digests baked in) at that version, with values:
+#   1. deploy/apps/<app>.yaml at the release tag vX.Y.Z: app defaults move with the chart they were
+#      written for, so a default that needs a newer chart cannot break an environment still on an
+#      older one (a strict values schema would reject it and the Application could not render);
+#   2. deploy/envs/<env>/<app>.yaml at main: environment overrides, limited by hack/check-env-values.py
+#      to keys every chart version accepts, so they apply without a release.
 #
 # Helm fills in the repo, revision and registry placeholders; every {{ }} is the ApplicationSet's.
 apiVersion: argoproj.io/v1alpha1
@@ -50,11 +54,14 @@ spec:
           helm:
             releaseName: '{{ trimSuffix ".yaml" .app.path.filename }}'
             valueFiles:
-              - '$values/deploy/apps/{{ trimSuffix ".yaml" .app.path.filename }}.yaml'
+              - '$release/deploy/apps/{{ trimSuffix ".yaml" .app.path.filename }}.yaml'
               - '$values/{{ .app.path.path }}/{{ .app.path.filename }}'
             parameters:
               - name: image.repository
                 value: '__REGISTRY__/{{ trimSuffix ".yaml" .app.path.filename }}'
+        - repoURL: __REPO_URL__
+          targetRevision: 'v{{ .version }}'
+          ref: release
         - repoURL: __REPO_URL__
           targetRevision: __REVISION__
           ref: values
