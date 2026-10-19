@@ -130,7 +130,7 @@ type Quote struct {
     Provider        string        // winning route's first-step provider
     Routes          int
     AmountOut, MinOut string      // smallest units, as strings
-    PriceImpactPct  float64
+    PriceImpactRatio float64      // USD out / USD in - 1, fees included
     Steps           int
     ExpiresAt       time.Time
     StepRefs        []string      // opaque, for BuildTx

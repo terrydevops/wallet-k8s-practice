@@ -29,14 +29,16 @@ type QuoteRequest struct {
 
 // Quote is the best route returned by an aggregator, reduced to what the lab measures.
 type Quote struct {
-	Provider       string    // provider of the best route's first step
-	Routes         int       // number of routes offered
-	Steps          int       // steps in the best route
-	AmountOut      string    // expected output of the best route, smallest units
-	MinOut         string    // guaranteed minimum output after slippage, smallest units
-	PriceImpactPct float64   // as reported by the aggregator
-	ExpiresAt      time.Time // zero if not reported
-	StepRefs       []string  // opaque references for BuildTx
+	Provider  string // provider of the best route's first step
+	Routes    int    // number of routes offered
+	Steps     int    // steps in the best route
+	AmountOut string // expected output of the best route, smallest units
+	MinOut    string // guaranteed minimum output after slippage, smallest units
+	// PriceImpactRatio is USD value out / USD value in - 1, fees included: -0.007 means 0.7% less
+	// value out than in. Zero if not reported.
+	PriceImpactRatio float64
+	ExpiresAt        time.Time // zero if not reported
+	StepRefs         []string  // opaque references for BuildTx
 }
 
 // UnsignedTx is a transaction built by the aggregator. Payloads stay raw: nothing in the

@@ -41,7 +41,7 @@ func (f *fakeQuoter) Quote(ctx context.Context, _ aggregator.QuoteRequest) (*agg
 	if f.quoteErr != nil {
 		return nil, f.quoteErr
 	}
-	return &aggregator.Quote{Provider: "1inch", Routes: 2, AmountOut: "234560000", PriceImpactPct: 0.01, StepRefs: []string{"s1"}}, nil
+	return &aggregator.Quote{Provider: "1inch", Routes: 2, AmountOut: "234560000", PriceImpactRatio: -0.007, StepRefs: []string{"s1"}}, nil
 }
 
 func (f *fakeQuoter) BuildTx(context.Context, string) (*aggregator.UnsignedTx, error) {

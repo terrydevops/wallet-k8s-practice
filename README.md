@@ -73,7 +73,7 @@ hack/                      secret.sh (never prints values), smoke.sh, render.sh,
 | `swap_quote_winner_total` | aggregator, scenario, provider | which liquidity provider wins |
 | `swap_quote_routes` | aggregator, scenario | routes offered |
 | `swap_quote_amount_out` | aggregator, scenario | expected output, smallest units |
-| `swap_quote_price_impact` | aggregator, scenario | as reported by the aggregator |
+| `swap_quote_price_impact_ratio` | aggregator, scenario | USD out / USD in - 1, fees included; -0.007 = 0.7% lost |
 | `http_client_*` | aggregator, url, method, name, status | from the go-libs HTTP client |
 
 ## Configuration

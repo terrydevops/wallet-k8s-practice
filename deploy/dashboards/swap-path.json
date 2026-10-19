@@ -374,7 +374,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Price impact (as reported)",
+      "title": "Price impact incl. fees (USD out / USD in - 1)",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -387,7 +387,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -406,7 +406,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "swap_quote_price_impact{namespace=~\"$namespace\",scenario=~\"$scenario\"}",
+          "expr": "swap_quote_price_impact_ratio{namespace=~\"$namespace\",scenario=~\"$scenario\"}",
           "legendFormat": "{{scenario}}"
         }
       ]

@@ -10,7 +10,7 @@
           "from": {"asset": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", "address": "0x0000000000000000000000000000000000000001", "amount": "100000000000000000"},
           "to": {"asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "address": "0x0000000000000000000000000000000000000001", "amount": "234560000", "minAmountOut": "232214400"},
           "slippage": "1",
-          "priceImpact": "0.01",
+          "priceImpact": "-0.7189422017",
           "provider": {"id": "1inch", "name": "1inch Network"},
           "networkFee": {"amount": "0.0001", "asset": "ETH"}
         }
@@ -27,7 +27,7 @@
           "from": {"asset": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", "address": "0x0000000000000000000000000000000000000001", "amount": "100000000000000000"},
           "to": {"asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "address": "0x0000000000000000000000000000000000000001", "amount": "234100000", "minAmountOut": "231759000"},
           "slippage": "1",
-          "priceImpact": "0.02",
+          "priceImpact": "-0.9104",
           "provider": {"id": "kyberswap", "name": "KyberSwap"},
           "networkFee": {"amount": "0.0001", "asset": "ETH"}
         }

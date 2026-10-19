@@ -40,7 +40,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "swap_quote_amount_out", Help: "Expected output of the best route, smallest units (float, precision may be lost).",
 		}, []string{"aggregator", "scenario"}),
 		priceImpact: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "swap_quote_price_impact", Help: "Price impact of the best route as reported by the aggregator.",
+			Name: "swap_quote_price_impact_ratio", Help: "USD value out / USD value in - 1 for the best route, fees included; negative is a loss.",
 		}, []string{"aggregator", "scenario"}),
 	}
 	reg.MustRegister(m.probes, m.duration, m.lastSuccess, m.winner, m.routes, m.amountOut, m.priceImpact)

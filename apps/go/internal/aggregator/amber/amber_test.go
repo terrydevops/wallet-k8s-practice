@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -79,7 +80,7 @@ func TestQuote(t *testing.T) {
 		t.Fatal(err)
 	}
 	if q.Provider != "1inch" || q.Routes != 2 || q.Steps != 1 || q.AmountOut != "234560000" || q.MinOut != "232214400" ||
-		q.PriceImpactPct != 0.01 || len(q.StepRefs) != 1 || q.StepRefs[0] != "step-1" || q.ExpiresAt.IsZero() {
+		math.Abs(q.PriceImpactRatio-(-0.007189422017)) > 1e-12 || len(q.StepRefs) != 1 || q.StepRefs[0] != "step-1" || q.ExpiresAt.IsZero() {
 		t.Fatalf("unexpected quote: %+v", q)
 	}
 	got := (*bodies)[0]

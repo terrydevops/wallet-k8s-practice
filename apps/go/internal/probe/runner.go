@@ -85,7 +85,7 @@ func (r *Runner) probe(ctx context.Context, s Scenario) {
 	r.m.lastSuccess.WithLabelValues(agg, s.Name).Set(float64(r.now().Unix()))
 	r.m.winner.WithLabelValues(agg, s.Name, quote.Provider).Inc()
 	r.m.routes.WithLabelValues(agg, s.Name).Set(float64(quote.Routes))
-	r.m.priceImpact.WithLabelValues(agg, s.Name).Set(quote.PriceImpactPct)
+	r.m.priceImpact.WithLabelValues(agg, s.Name).Set(quote.PriceImpactRatio)
 	if v, ok := parseAmount(quote.AmountOut); ok {
 		r.m.amountOut.WithLabelValues(agg, s.Name).Set(v)
 	}

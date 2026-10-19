@@ -241,12 +241,14 @@ func fromRouteResponse(resp routeResponse) (*aggregator.Quote, error) {
 	if t, err := time.Parse(time.RFC3339, best.ExpirationDate); err == nil {
 		q.ExpiresAt = t
 	}
+	// priceImpact is (USD out / USD in - 1) in percent, fees included (checked against live quotes,
+	// 2026-10-19). Only the first step is used; multi-step routes are not combined yet.
 	if first.PriceImpact != "" {
 		v, err := strconv.ParseFloat(first.PriceImpact, 64)
 		if err != nil {
 			return nil, fmt.Errorf("%w: priceImpact %q", aggregator.ErrDecode, first.PriceImpact)
 		}
-		q.PriceImpactPct = v
+		q.PriceImpactRatio = v / 100 // Amber reports percent
 	}
 	for _, s := range best.Steps {
 		q.StepRefs = append(q.StepRefs, s.ID)
