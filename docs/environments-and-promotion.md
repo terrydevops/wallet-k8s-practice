@@ -68,6 +68,14 @@ Stage 2 (later): Kargo (operator) does the same with CRDs:
 - Kargo docs, Concepts — Warehouse, Freight, Stage, Promotion
 - The New Stack, The super Helm chart: to deploy or not to deploy — shared vs per-service charts
 
+## Which git revision each value comes from
+
+| Values | Revision | Why |
+|---|---|---|
+| Chart (templates, schema, image digests) | OCI chart at the environment's version | A version is one tested, signed bundle |
+| `deploy/apps/<app>.yaml` (app defaults) | git tag `v<version>` | Defaults are written for one chart version. Read from main, a new default reached environments still on an older chart, whose strict schema rejected it, and the Application could not render (staging on 0.2.0, after `postDeployCheck` was added for 0.3.0) |
+| `deploy/envs/<env>/<app>.yaml` (overrides) | main | Per-environment settings apply without a release; `make env-check` limits them to keys every chart version accepts |
+
 ## Guardrails between git and a running pod
 
 | Gate | Where | Stops |

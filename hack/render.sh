@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Renders every app in every environment into <outdir>/<env>/<app>.yaml, exactly as it would be
-# installed: chart defaults, then deploy/apps/<app>.yaml, then deploy/envs/<env>/<app>.yaml.
+# Renders every app in every environment into <outdir>/<env>/<app>.yaml as the next release would
+# install it: the chart and deploy/apps/<app>.yaml from this tree, then deploy/envs/<env>/<app>.yaml.
+# (Argo CD takes the chart and deploy/apps from the release each environment pins; see
+# deploy/argocd/files/workloads.yaml.)
 #   hack/render.sh <outdir> [deploy-dir]
 set -euo pipefail
 out=$1 deploy=${2:-deploy}
