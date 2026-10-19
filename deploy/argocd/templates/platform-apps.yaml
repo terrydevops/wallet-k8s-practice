@@ -69,7 +69,8 @@ spec:
     syncOptions:
       - ServerSideApply=true
 ---
-# Admission control. Kyverno verifies image signatures.
+# Admission control. Kyverno verifies image signatures; the policies themselves are in
+# deploy/policies (Application "policies"), applied once Kyverno and its CRDs are healthy.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -98,3 +99,25 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true # Kyverno CRDs exceed the client-side apply annotation limit
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: policies
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: {{ .Values.repoURL | quote }}
+    targetRevision: {{ .Values.targetRevision | quote }}
+    path: deploy/policies
+    helm:
+      valuesObject:
+        repoURL: {{ .Values.repoURL | quote }}
+        registry: {{ .Values.registry | quote }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    retry: {limit: 5} # the first sync can race the Kyverno CRDs

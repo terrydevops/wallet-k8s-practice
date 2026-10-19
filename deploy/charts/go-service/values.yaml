@@ -31,6 +31,15 @@ resources:
   requests: { cpu: 10m, memory: 32Mi }
   limits: { memory: 64Mi }
 
+# Post-deploy check (quote-prober only): a Job that runs `quote-prober verify` against the new
+# release and passes once every scenario has a successful quote no older than maxAge. Rendered as a
+# Helm post-install/post-upgrade hook, which Argo CD runs as a PostSync hook: a failing check marks
+# the sync as failed. timeout must stay under the Job's 6-minute deadline.
+postDeployCheck:
+  enabled: false
+  maxAge: 3m
+  timeout: 4m
+
 metrics:
   serviceMonitor:
     enabled: true

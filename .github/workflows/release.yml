@@ -3,7 +3,7 @@ name: release
 # git tag vX.Y.Z on a commit of main →
 #   images: multi-arch build (amd64 + arm64), push, scan, SBOM + provenance, keyless cosign signature
 #   chart:  go-service X.Y.Z with every image digest baked in, pushed to GHCR as OCI, signed
-#   promote: dev gets X.Y.Z directly (commit to main); staging by pull request; Argo CD syncs each
+#   promote: a pull request per environment; dev merges itself once checks pass, staging needs review
 # One version therefore always means one chart plus the exact images it was released with.
 on:
   push:
@@ -169,42 +169,47 @@ jobs:
           cosign sign --yes "$REGISTRY/charts/go-service@$DIGEST"
           echo "chart: \`$REGISTRY/charts/go-service:$VERSION\` (\`$DIGEST\`)" >> "$GITHUB_STEP_SUMMARY"
 
+  # main only changes through pull requests that pass the required checks, bot included:
+  #   dev: PR merged automatically once the checks pass;  staging: PR merged by a person.
+  # GITHUB_TOKEN events start no workflows, so each promotion dispatches ci.yml on its branch; the
+  # check runs land on the PR's head commit and satisfy the ruleset.
   promote:
-    name: promote (dev now, staging by pull request)
+    name: promote (dev automatically, staging by review)
     needs: [meta, chart]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
       pull-requests: write
+      actions: write # dispatch ci.yml on the promotion branches
     env:
       VERSION: ${{ needs.meta.outputs.version }}
-      BRANCH: promote/staging-${{ needs.meta.outputs.version }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
 
-      - name: dev, without review
+      - name: open promotion pull requests
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          sed -i -E "s/^version:.*/version: \"$VERSION\"/" deploy/envs/dev/version.yaml
-          if git diff --quiet; then echo "dev already runs $VERSION"; else
-            git commit -am "deploy(dev): $VERSION"
-            git push origin HEAD:main # GITHUB_TOKEN pushes do not trigger workflows, so this cannot loop
-            echo "dev: $VERSION committed to main" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: staging, by pull request
-        run: |
-          sed -i -E "s/^version:.*/version: \"$VERSION\"/" deploy/envs/staging/version.yaml
-          git diff --exit-code --quiet && { echo "staging already runs $VERSION"; exit 0; }
-          git switch -c "$BRANCH"
-          git commit -am "deploy(staging): $VERSION"
-          git push origin "$BRANCH"
-          body="Release $VERSION: images and chart built, scanned and signed by run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Argo CD syncs staging after merge."
-          if ! gh pr create --base main --head "$BRANCH" --title "deploy(staging): $VERSION" --body "$body"; then
-            echo "::warning::could not open the PR (is 'Allow GitHub Actions to create pull requests' on?); open it from the branch"
-            echo "Open the promotion PR: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/main...$BRANCH" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          for env in dev staging; do
+            branch="promote/$env-$VERSION"
+            git switch -q --detach origin/main
+            sed -i -E "s/^version:.*/version: \"$VERSION\"/" "deploy/envs/$env/version.yaml"
+            if git diff --quiet; then echo "$env already runs $VERSION"; continue; fi
+            git switch -c "$branch"
+            git commit -qam "deploy($env): $VERSION"
+            git push -q origin "$branch"
+            if [ "$env" = dev ]; then merge="Merged automatically once the checks pass."; else merge="Merge after review."; fi
+            body="Release $VERSION: images and chart built, scanned and signed by $run_url. Argo CD syncs $env after merge, then runs the post-deploy check. $merge"
+            if ! url=$(gh pr create --base main --head "$branch" --title "deploy($env): $VERSION" --body "$body"); then
+              echo "::warning::could not open the $env PR (is 'Allow GitHub Actions to create pull requests' on?)"
+              echo "Open the $env promotion PR: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/main...$branch" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            gh workflow run ci.yml --ref "$branch"
+            if [ "$env" = dev ]; then gh pr merge "$url" --auto --squash --delete-branch; fi
+            echo "$env: $url" >> "$GITHUB_STEP_SUMMARY"
+          done

@@ -47,7 +47,11 @@ prune). Change them through git; chart versions live in `deploy/argocd/values.ya
 `make argocd` are for a new cluster or break-glass only; commit any fix made that way right after.
 
 A workload Application exists for `<env>` only once `deploy/envs/<env>/version.yaml` names a release;
-prod is never auto-synced.
+prod is never auto-synced. A release reaches an environment only through a pull request (dev merges
+itself once CI passes, staging needs review); in the cluster, admission policies admit only images from
+this repo's registry, pinned by digest and signed by its release workflow (Kyverno + a built-in
+ValidatingAdmissionPolicy, `deploy/policies`), and a PostSync Job checks that the new release gets
+quotes. Details: [guardrails](docs/environments-and-promotion.md#guardrails-between-git-and-a-running-pod).
 
 `make help` lists every target. `make ci` runs locally what the CI workflow runs. `make render` writes
 the final manifests of every environment to `build/rendered/`. Environments, versions and promotion:
@@ -57,7 +61,7 @@ the final manifests of every environment to `build/rendered/`. Environments, ver
 
 ```
 apps/go/
-  cmd/quote-prober/        wiring and lifecycle only
+  cmd/quote-prober/        wiring and lifecycle; `quote-prober verify` is the post-deploy check
   cmd/mock-quote-api/      fake API: verifies signed headers, rejects replayed nonces; MOCK_MODE degrades the
                            quote endpoints (rate_limited, server_error, slow + MOCK_SLOW_DELAY)
   internal/aggregator/     vendor-neutral Quoter interface and types
@@ -71,7 +75,8 @@ apps/go/
 .github/workflows/ci.yml   tidy, vet, race tests, golangci-lint, image build + Trivy, helm lint + kubeconform,
                            gitleaks, Trivy fs
 deploy/bootstrap/          kind cluster (node image pinned by digest)
-deploy/platform-values/    kube-prometheus-stack and Argo CD values
+deploy/platform-values/    kube-prometheus-stack, Argo CD and Kyverno values
+deploy/policies/           admission policies for wallet-dev/staging/prod (Helm chart, Argo CD app "policies")
 deploy/charts/go-service/  one chart for both Go binaries: Deployment (restricted PSS), Service,
                            ServiceMonitor, scenarios ConfigMap; strict values schema
 deploy/dashboards/         Grafana dashboard (folder Wallet), installed once into monitoring; "environment" picks the namespace

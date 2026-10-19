@@ -24,6 +24,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "verify" {
+		if err := verify(os.Args[2:]); err != nil {
+			slog.Error("verify failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("quote-prober stopped", "err", err)
 		os.Exit(1)

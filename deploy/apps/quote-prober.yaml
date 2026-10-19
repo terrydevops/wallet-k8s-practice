@@ -11,6 +11,8 @@ env:
   PROBE_TIMEOUT: 10s
   LOG_LEVEL: info
 secretEnvFrom: quote-prober-amber
+postDeployCheck:
+  enabled: true
 resources:
   requests: { cpu: 10m, memory: 32Mi }
   limits: { memory: 64Mi }
