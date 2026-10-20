@@ -144,6 +144,10 @@ dev: ## Inner loop: build, kind load, helm install mock + prober into wallet-loc
 	    $$( [ $$app = quote-prober ] && echo --set env.AMBER_BASE_URL=$(if $(REAL),https://tws.trustwallet.com,http://mock-quote-api:8081) --set env.PROBE_INTERVAL=30s) \
 	    --wait || exit 1; done
 
+.PHONY: dev-down
+dev-down: ## Remove what make dev installed (the wallet-local namespace)
+	$(KUBECTL) delete namespace $(LOCAL_NS) --ignore-not-found --wait
+
 .PHONY: smoke
 smoke: ## Assert quote-prober in NS (default wallet-local) reports successful quotes
 	hack/smoke.sh $(KCTX) $(or $(NS),$(LOCAL_NS))
