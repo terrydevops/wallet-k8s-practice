@@ -28,6 +28,7 @@ On a local kind cluster (Prometheus Operator, Grafana dashboard, mock API by def
 make platform            # kind cluster "wallet-k8s-practice" + kube-prometheus-stack (~2 min)
 make dev                 # inner loop: build, kind load, helm install mock + prober into wallet-local
 make smoke               # asserts successful quotes are being recorded
+make dev-down            # remove wallet-local again
 make ui                  # Grafana on localhost:3300 (GRAFANA_PORT), folder Wallet, "Swap path — quote prober"
 make dev REAL=1          # same, against the real API with the key from .env
 make down                # delete the cluster

@@ -671,7 +671,7 @@
     {
       "type": "timeseries",
       "title": "API quota used (shared key, all environments)",
-      "description": "Requests per second sent to the aggregator by every environment that uses the key, stacked. The free tier allows 1 request/s per key, shared by all of them. Each pod limits itself to AMBER_RPS (0.5), so two environments at full speed reach the limit together. Not filtered by environment, on purpose.",
+      "description": "Requests per second sent to the aggregator by every environment that uses the key, stacked. The free tier allows 1 request/s per key, shared by all of them. Each pod limits itself to AMBER_RPS (0.5), so two environments at full speed reach the limit together. Not filtered by environment, on purpose; only requests to the mock API (make dev without REAL=1) are left out, as they use no quota.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -726,7 +726,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (namespace) (rate(httpclient_request_total[5m]))",
+          "expr": "sum by (namespace) (rate(httpclient_request_total{url!~\"https?://mock-quote-api[:/].*\"}[5m]))",
           "legendFormat": "{{namespace}}"
         }
       ],
