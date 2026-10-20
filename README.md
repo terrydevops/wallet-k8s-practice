@@ -7,6 +7,57 @@ operators, Argo CD and GitHub Actions. See [PLAN.md](PLAN.md) for the full desig
 implementation) and exports Prometheus metrics; `mock-quote-api` fakes that API so everything runs
 without credentials. CI runs from the first commit.
 
+## Architecture
+
+What runs in the cluster:
+
+```mermaid
+flowchart TB
+  argo["Argo CD (namespace argocd)<br/>root app-of-apps + ApplicationSet"]
+  subgraph admission["Admission (fail closed)"]
+    direction LR
+    vap["ValidatingAdmissionPolicy<br/>our registry, by digest"]
+    kyv["Kyverno<br/>cosign signature from release.yml"]
+  end
+  subgraph envs["wallet-dev / wallet-staging"]
+    direction LR
+    secret[("Secret<br/>API credentials")] --> prober["quote-prober<br/>Deployment"]
+    verify["quote-prober verify<br/>PostSync Job"] -- "reads /metrics" --> prober
+  end
+  subgraph monitoring["monitoring"]
+    direction LR
+    graf["Grafana<br/>folders: Kubernetes, Wallet"] --> prom["Prometheus<br/>(kube-prometheus-stack)"]
+  end
+  api["DEX aggregator API<br/>one shared key, 1 req/s"]
+
+  argo -- "syncs" --> admission
+  argo -- "syncs" --> envs
+  argo -- "syncs" --> monitoring
+  admission -. "admits the pod" .-> prober
+  prom -- "scrapes /metrics (ServiceMonitor)" --> prober
+  prober -- "HMAC-signed quote requests" --> api
+```
+
+wallet-prod is set up the same way and gets an app once a release is promoted to it.
+
+From a commit to a running pod:
+
+```mermaid
+flowchart LR
+  pr["Pull request"] --> ci["ci.yml<br/>tests, lint, image build + Trivy,<br/>helm lint + kubeconform, gitleaks"]
+  ci -- "required checks<br/>(ruleset on main)" --> main["main"]
+  main -- "tag vX.Y.Z" --> rel["release.yml"]
+  rel --> ghcr[("GHCR<br/>images + OCI chart,<br/>cosign keyless signatures")]
+  rel -- "promotion PR<br/>(auto-merge)" --> dev["envs/dev/version.yaml"]
+  rel -- "promotion PR<br/>(human review)" --> stg["envs/staging/version.yaml"]
+  dev --> argo["Argo CD<br/>chart @ version, defaults @ tag,<br/>env overrides @ main"]
+  stg --> argo
+  ghcr --> argo
+  argo --> adm["Admission:<br/>VAP + Kyverno"]
+  adm --> pod["Pod"]
+  pod --> chk["PostSync verify:<br/>fresh successful quotes"]
+```
+
 ## Quickstart
 
 ```bash
